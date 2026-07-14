@@ -10,7 +10,7 @@ import {
   entryFor, effectiveTarget, isHit, dayStatus, trackerStats, firstDayKey,
   fmtAmount, currentStreak,
 } from '../model.js';
-import { h, icon, accentStyle, haptic, ringSVG, openSheet, reducedMotion } from '../ui.js';
+import { h, icon, accentStyle, haptic, ringSVG } from '../ui.js';
 import { openDayEditor } from './day-editor.js';
 import { openLogSheet } from './log-sheet.js';
 import { openTrackerOptions } from './editors.js';
