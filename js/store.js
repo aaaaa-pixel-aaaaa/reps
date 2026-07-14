@@ -2,8 +2,16 @@
 // localStorage under one key; every mutation goes through commit() which
 // re-normalizes touched entries, saves, and notifies subscribers.
 
-import { todayKey, isValidKey, addDays } from './dates.js';
+import { todayKey, isValidKey, addDays, parseKey } from './dates.js';
 import { roundAmount } from './model.js';
+
+// Timestamp for a set logged against dateKey: real time for today, a
+// synthetic noon-ish time for retro days (keeps display + undo order sane).
+export function stampFor(dateKey, entry, now = Date.now()) {
+  if (dateKey === todayKey()) return now;
+  const n = entry && entry.sets ? entry.sets.length : 0;
+  return parseKey(dateKey).getTime() + (12 * 60 + n) * 60000;
+}
 
 export const SCHEMA = 1;
 export const STORAGE_KEY = 'reps_v1';

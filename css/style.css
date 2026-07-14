@@ -183,7 +183,8 @@ input, select, textarea { font: inherit; color: inherit; }
   justify-content: center;
   gap: 0;
 }
-.ring-val { font-size: 26px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.05; }
+.ring-val { font-size: 26px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.05; transition: color 0.3s; }
+.done .ring-val, .trow.done .trow-val { color: var(--c); }
 .ring-goal { font-size: 11px; color: var(--dim); font-weight: 600; }
 
 @keyframes goalpop {
@@ -202,22 +203,16 @@ input, select, textarea { font: inherit; color: inherit; }
   border: 2.5px solid var(--c-40);
   display: grid;
   place-items: center;
-  color: transparent;
-  transition: background 0.25s, border-color 0.25s, transform 0.18s var(--spring);
+  color: rgba(255, 240, 220, 0.16);
+  transition: background 0.25s, border-color 0.25s, color 0.25s, transform 0.18s var(--spring);
 }
 .habit-check svg { width: 38px; height: 38px; }
-.habit-check svg path {
-  stroke-dasharray: 30;
-  stroke-dashoffset: 30;
-  transition: stroke-dashoffset 0.3s ease 0.05s;
-}
 .habit-check.done {
   background: var(--c);
   border-color: var(--c);
   color: var(--on-c);
   box-shadow: 0 0 26px -6px var(--c-70);
 }
-.habit-check.done svg path { stroke-dashoffset: 0; }
 @keyframes pop {
   0% { transform: scale(1); }
   40% { transform: scale(1.16); }
@@ -290,8 +285,8 @@ input, select, textarea { font: inherit; color: inherit; }
   border: 2px solid var(--c-40);
   display: grid;
   place-items: center;
-  color: transparent;
-  transition: background 0.2s, transform 0.18s var(--spring);
+  color: rgba(255, 240, 220, 0.16);
+  transition: background 0.2s, color 0.2s, transform 0.18s var(--spring);
 }
 .mini-check svg { width: 18px; height: 18px; }
 .mini-check.done { background: var(--c); border-color: var(--c); color: var(--on-c); }
@@ -560,6 +555,7 @@ input[type="date"].input { line-height: 48px; }
   margin: 2px 0 0;
 }
 .log-total { font-size: 40px; font-weight: 800; letter-spacing: -0.03em; transition: color 0.3s; }
+.log-total.done { color: var(--c); text-shadow: 0 0 18px var(--c-40); }
 .log-goal { font-size: 15px; color: var(--dim); font-weight: 600; }
 .log-meta { text-align: center; color: var(--faint); font-size: 12.5px; font-weight: 600; margin-top: 2px; min-height: 17px; }
 .log-meta .hit { color: var(--c); }
@@ -694,8 +690,8 @@ input[type="date"].input { line-height: 48px; }
 .cal-cell:not(:disabled):active { transform: scale(0.88); }
 .cal-cell.hit { background: var(--c); color: var(--on-c); }
 .cal-cell.partial { background: var(--c-25); color: var(--text); }
-.cal-cell.miss { background: #221A14; color: var(--faint); }
-.cal-cell.pending { background: #221A14; }
+.cal-cell.miss { background: rgba(228, 87, 61, 0.1); color: rgba(255, 150, 125, 0.6); }
+.cal-cell.pending { background: var(--raise2); }
 .cal-cell.future, .cal-cell.empty { color: var(--faint); opacity: 0.5; }
 .cal-cell.today { box-shadow: inset 0 0 0 1.5px var(--c); }
 .cal-cell .ovr {
@@ -795,23 +791,20 @@ input[type="date"].input { line-height: 48px; }
   width: 132px;
   height: 132px;
   margin: 16px auto;
-  display: block;
   border-radius: 50%;
   border: 3px solid var(--c-40);
-  color: transparent;
-  transition: background 0.25s, transform 0.18s var(--spring), box-shadow 0.3s;
+  color: rgba(255, 240, 220, 0.16);
+  transition: background 0.25s, color 0.25s, transform 0.18s var(--spring), box-shadow 0.3s;
   display: grid;
   place-items: center;
 }
 .bigtoggle svg { width: 58px; height: 58px; }
-.bigtoggle svg path { stroke-dasharray: 30; stroke-dashoffset: 30; transition: stroke-dashoffset 0.3s ease 0.05s; }
 .bigtoggle.done {
   background: var(--c);
   border-color: var(--c);
   color: var(--on-c);
   box-shadow: 0 0 44px -10px var(--c-70);
 }
-.bigtoggle.done svg path { stroke-dashoffset: 0; }
 .bigtoggle:active { transform: scale(0.93); }
 .bigtoggle.pop { animation: pop 0.45s var(--spring); }
 
