@@ -125,6 +125,9 @@ export function openSheet({ title, accent, build, onClose } = {}) {
   const grab = sheet.querySelector('.sheet-grab');
   for (const zone of [head, grab]) {
     zone.addEventListener('pointerdown', (e) => {
+      // capturing here would swallow the button's click (browsers retarget
+      // clicks to the capture element), leaving the X dead — let it through
+      if (e.target.closest && e.target.closest('button')) return;
       dragY = e.clientY;
       sheet.classList.add('dragging');
       zone.setPointerCapture(e.pointerId);
