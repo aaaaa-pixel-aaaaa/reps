@@ -1,0 +1,200 @@
+// Pure domain logic: effective targets, day status, streaks, stats.
+// No DOM, no storage — everything takes plain data in and returns data out,
+// so retro edits "recompute" simply by re-rendering.
+
+import { addDays, daysBetween, todayKey } from './dates.js';
+
+export function roundAmount(tracker, x) {
+  return tracker.dec ? Math.round(x * 100) / 100 : Math.round(x);
+}
+
+// Display formatting for amounts: integers plain, decimals trimmed ("2.5", "3").
+export function fmtAmount(tracker, x) {
+  if (!tracker.dec) return String(Math.round(x));
+  const r = Math.round(x * 100) / 100;
+  return String(parseFloat(r.toFixed(2)));
+}
+
+// Target from the tracker's progression settings alone (no per-day override).
+export function computedTarget(tracker, dateKey) {
+  if (tracker.type !== 'counter') return 0;
+  const t = tracker.target || {};
+  const base = t.base || 0;
+  if (!t.mode || t.mode === 'none' || !t.inc || !t.start) return base;
+  const elapsed = Math.max(0, daysBetween(t.start, dateKey));
+  const steps = t.mode === 'weekly' ? Math.floor(elapsed / 7) : elapsed;
+  return roundAmount(tracker, base + steps * t.inc);
+}
+
+// What the user must reach on that day: per-day override wins.
+export function effectiveTarget(tracker, dateKey, entry) {
+  if (entry && entry.goalOverride != null) return entry.goalOverride;
+  return computedTarget(tracker, dateKey);
+}
+
+export function entryFor(days, dateKey, trackerId) {
+  const day = days[dateKey];
+  return day ? day[trackerId] : undefined;
+}
+
+// Did this day meet its goal?
+// - habit: done
+// - counter with a positive target: total >= target
+// - counter with target 0 via explicit override: a declared rest day, always met
+// - counter with no target at all: any activity counts
+export function isHit(tracker, entry, dateKey) {
+  if (tracker.type === 'habit') return !!(entry && entry.done);
+  const target = effectiveTarget(tracker, dateKey, entry);
+  if (entry && entry.goalOverride === 0) return true;
+  const total = entry ? entry.total || 0 : 0;
+  return target > 0 ? total >= target : total > 0;
+}
+
+// Earliest day with any entry for this tracker (or null).
+export function firstLogKey(tracker, days) {
+  let first = null;
+  for (const key in days) {
+    if (days[key][tracker.id] && (first === null || key < first)) first = key;
+  }
+  return first;
+}
+
+// Earliest day that "exists" for the tracker: first log or creation day.
+export function firstDayKey(tracker, days) {
+  const log = firstLogKey(tracker, days);
+  if (log && (!tracker.createdAt || log < tracker.createdAt)) return log;
+  return tracker.createdAt || log;
+}
+
+// Calendar cell status.
+//   'hit' | 'partial' (counter under target) | 'miss' | 'pending' (today,
+//   nothing yet) | 'empty' (before the tracker existed / padding) | 'future'
+export function dayStatus(tracker, days, dateKey, today = todayKey()) {
+  if (dateKey > today) return 'future';
+  const entry = entryFor(days, dateKey, tracker.id);
+  if (isHit(tracker, entry, dateKey)) return 'hit';
+  if (tracker.type === 'counter' && entry && (entry.total || 0) > 0) return 'partial';
+  const first = firstDayKey(tracker, days);
+  if (!first || dateKey < first) return 'empty';
+  if (dateKey === today) return 'pending';
+  // A counter with no goal that day isn't "missed", just quiet.
+  if (tracker.type === 'counter' && effectiveTarget(tracker, dateKey, entry) <= 0) return 'empty';
+  return 'miss';
+}
+
+// Consecutive goal-hit days ending today; an unfinished today doesn't break
+// the run, it just doesn't count yet.
+export function currentStreak(tracker, days, today = todayKey()) {
+  let d = today;
+  if (!isHit(tracker, entryFor(days, d, tracker.id), d)) d = addDays(d, -1);
+  let n = 0;
+  while (isHit(tracker, entryFor(days, d, tracker.id), d)) {
+    n++;
+    d = addDays(d, -1);
+  }
+  return n;
+}
+
+export function longestStreak(tracker, days, today = todayKey()) {
+  const first = firstDayKey(tracker, days);
+  if (!first) return 0;
+  let best = 0;
+  let run = 0;
+  for (let d = first; d <= today; d = addDays(d, 1)) {
+    if (isHit(tracker, entryFor(days, d, tracker.id), d)) {
+      run++;
+      if (run > best) best = run;
+    } else if (d !== today) {
+      run = 0; // today still in progress doesn't reset the run
+    }
+  }
+  return best;
+}
+
+// All-time stats for the history view.
+export function trackerStats(tracker, days, today = todayKey()) {
+  const s = {
+    total: 0,
+    sessions: 0,
+    goalsHit: 0,
+    doneDays: 0,
+    bestDay: null, // {key, total}
+    avgPerSession: 0,
+    currentStreak: currentStreak(tracker, days, today),
+    longestStreak: longestStreak(tracker, days, today),
+    loggedDays: 0,
+  };
+  let positiveSum = 0;
+  for (const key in days) {
+    if (key > today) continue;
+    const entry = days[key][tracker.id];
+    if (!entry) continue;
+    s.loggedDays++;
+    if (isHit(tracker, entry, key)) s.goalsHit++;
+    if (tracker.type === 'habit') {
+      if (entry.done) s.doneDays++;
+      continue;
+    }
+    const total = entry.total || 0;
+    s.total += total;
+    for (const set of entry.sets || []) {
+      if (set.a > 0) {
+        s.sessions++;
+        positiveSum += set.a;
+      }
+    }
+    if (total > 0 && (!s.bestDay || total > s.bestDay.total)) {
+      s.bestDay = { key, total };
+    }
+  }
+  s.total = roundAmount(tracker, s.total);
+  if (s.sessions > 0) s.avgPerSession = positiveSum / s.sessions;
+  return s;
+}
+
+// ---- Sorting helpers shared by views and reorder mutations ----
+
+const byOrder = (a, b) => (a.order - b.order) || String(a.id).localeCompare(String(b.id));
+
+export function activeTrackers(state) {
+  return Object.values(state.trackers).filter((t) => !t.archived);
+}
+
+// Priority trackers, pinned to the top of Home.
+export function pinnedTrackers(state) {
+  return activeTrackers(state).filter((t) => t.priority).sort(byOrder);
+}
+
+// Non-priority trackers inside a group (groupId null = ungrouped).
+export function groupTrackers(state, groupId) {
+  return activeTrackers(state)
+    .filter((t) => !t.priority && (t.groupId || null) === (groupId || null))
+    .sort(byOrder);
+}
+
+export function sortedGroups(state) {
+  return Object.values(state.groups).sort(
+    (a, b) => (b.priority ? 1 : 0) - (a.priority ? 1 : 0) || byOrder(a, b)
+  );
+}
+
+// The list a tracker is reordered within: pinned strip if priority,
+// otherwise its group (or ungrouped) section.
+export function siblingsOf(state, tracker) {
+  return tracker.priority ? pinnedTrackers(state) : groupTrackers(state, tracker.groupId);
+}
+
+// Today's headline: how many goals are hit out of those that exist today.
+// Counters with no target that day don't count as goals.
+export function todaySummary(state, today = todayKey()) {
+  let goals = 0;
+  let hit = 0;
+  for (const t of activeTrackers(state)) {
+    const entry = entryFor(state.days, today, t.id);
+    if (t.type === 'counter' && effectiveTarget(t, today, entry) <= 0 &&
+        !(entry && entry.goalOverride === 0)) continue;
+    goals++;
+    if (isHit(t, entry, today)) hit++;
+  }
+  return { goals, hit };
+}
