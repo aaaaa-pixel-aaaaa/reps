@@ -113,7 +113,9 @@ input, select, textarea { font: inherit; color: inherit; }
 
 .cards {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* minmax(0,…): plain 1fr won't shrink below a long nowrap name and
+     blows the page out sideways on narrow phones */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 10px;
 }
@@ -150,14 +152,11 @@ input, select, textarea { font: inherit; color: inherit; }
 .card-name {
   font-size: 14px;
   font-weight: 700;
+  /* block, not flex: ellipsis doesn't apply to a text node inside a flex row */
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  justify-content: center;
 }
 .card-name .star { color: var(--c); width: 12px; height: 12px; flex: none; }
 
