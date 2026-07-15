@@ -1,6 +1,6 @@
 // Versioned cache-first service worker. Bump VERSION on every deploy that
 // changes any asset — that is the whole update mechanism.
-const VERSION = 'reps-v1.0.2';
+const VERSION = 'reps-v1.0.3';
 const CACHE = `reps-${VERSION}`;
 
 const ASSETS = [

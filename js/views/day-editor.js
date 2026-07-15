@@ -81,7 +81,7 @@ export function openDayEditor(store, trackerId, dateKey) {
       const amtInput = h('input', {
         class: 'input num', type: 'number', min: '0',
         inputmode: t.dec ? 'decimal' : 'numeric', step: t.dec ? '0.1' : '1',
-        placeholder: unit ? `add amount (${unit})` : 'add amount',
+        placeholder: t.time ? 'add amount (minutes)' : (unit ? `add amount (${unit})` : 'add amount'),
       });
       const addRow = h('div', { class: 'field-row', style: 'margin-top:10px' },
         h('div', { class: 'field', style: 'margin:0;flex:1' }, amtInput),
@@ -99,7 +99,7 @@ export function openDayEditor(store, trackerId, dateKey) {
       const setTotalInput = h('input', {
         class: 'input num', type: 'number', min: '0',
         inputmode: t.dec ? 'decimal' : 'numeric', step: t.dec ? '0.1' : '1',
-        placeholder: 'set exact total',
+        placeholder: t.time ? 'set exact total (minutes)' : 'set exact total',
       });
       const setTotalRow = h('div', { class: 'field-row', style: 'margin-top:10px;display:none' },
         h('div', { class: 'field', style: 'margin:0;flex:1' }, setTotalInput),
@@ -131,7 +131,7 @@ export function openDayEditor(store, trackerId, dateKey) {
       const goalInput = h('input', {
         class: 'input num', type: 'number', min: '0',
         inputmode: t.dec ? 'decimal' : 'numeric', step: t.dec ? '0.1' : '1',
-        placeholder: 'goal for this day',
+        placeholder: t.time ? 'goal for this day (minutes)' : 'goal for this day',
       });
       const goalEditRow = h('div', { class: 'field-row', style: 'display:none;margin-top:-4px;margin-bottom:10px' },
         h('div', { class: 'field', style: 'margin:0;flex:1' }, goalInput),

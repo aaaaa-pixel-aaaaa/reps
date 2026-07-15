@@ -8,8 +8,20 @@ export function roundAmount(tracker, x) {
   return tracker.dec ? Math.round(x * 100) / 100 : Math.round(x);
 }
 
-// Display formatting for amounts: integers plain, decimals trimmed ("2.5", "3").
+// Minutes -> "45m", "1h 30m", "2h" (sign preserved for corrections).
+export function fmtMinutes(x) {
+  const neg = x < 0;
+  const a = Math.abs(Math.round(x));
+  const hp = Math.floor(a / 60);
+  const m = a % 60;
+  const s = hp ? (m ? `${hp}h ${m}m` : `${hp}h`) : `${m}m`;
+  return neg ? `-${s}` : s;
+}
+
+// Display formatting for amounts: integers plain, decimals trimmed ("2.5",
+// "3"), time counters as hours/minutes.
 export function fmtAmount(tracker, x) {
+  if (tracker.time) return fmtMinutes(x);
   if (!tracker.dec) return String(Math.round(x));
   const r = Math.round(x * 100) / 100;
   return String(parseFloat(r.toFixed(2)));

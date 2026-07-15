@@ -5,7 +5,7 @@ import {
 } from '../js/dates.js';
 import {
   computedTarget, effectiveTarget, isHit, dayStatus, currentStreak,
-  longestStreak, trackerStats, todaySummary, fmtAmount,
+  longestStreak, trackerStats, todaySummary, fmtAmount, fmtMinutes,
 } from '../js/model.js';
 import { createStore, normalizeState, validateImport, seedState, demoState } from '../js/store.js';
 import { pinnedTrackers, groupTrackers, reorderContext } from '../js/model.js';
@@ -254,6 +254,24 @@ eq(effectiveTarget(counter(), '2026-07-14', { total: 10, sets: [] }), 50, 'no ov
   // Group delete ungroups trackers.
   store.deleteGroup('g_fitness');
   eq(store.state.trackers.t_run.groupId, null, 'group delete ungroups');
+}
+
+// ---------- time counters ----------
+eq(fmtMinutes(0), '0m', 'zero minutes');
+eq(fmtMinutes(45), '45m', 'minutes only');
+eq(fmtMinutes(60), '1h', 'exact hour');
+eq(fmtMinutes(90), '1h 30m', 'hours and minutes');
+eq(fmtMinutes(150), '2h 30m', 'multiple hours');
+eq(fmtMinutes(-5), '-5m', 'negative correction');
+{
+  const t = { type: 'counter', time: true, dec: false };
+  eq(fmtAmount(t, 75), '1h 15m', 'fmtAmount routes time counters');
+  const norm = normalizeState({
+    trackers: { x: { id: 'x', name: 'Read', type: 'counter', time: true, dec: true, unit: 'km' } },
+  });
+  eq(norm.trackers.x.dec, false, 'time counters force integer minutes');
+  eq(norm.trackers.x.unit, '', 'time counters have no free-text unit');
+  eq(norm.trackers.x.time, true, 'time flag survives normalize');
 }
 
 // ---------- pinned strip vs group ordering ----------

@@ -2,7 +2,7 @@
 // (pin, reorder, move to group, archive, delete).
 
 import { todayKey, isValidKey } from '../dates.js';
-import { reorderContext, sortedGroups } from '../model.js';
+import { reorderContext, sortedGroups, fmtMinutes } from '../model.js';
 import { PALETTE } from '../store.js';
 import { h, icon, haptic, openSheet, confirmSheet, toast } from '../ui.js';
 
@@ -131,16 +131,25 @@ export function openTrackerEditor(store, trackerId = null, presets = {}) {
         unitInput.value = f.unit || '';
         unitInput.addEventListener('input', () => { f.unit = unitInput.value; });
 
+        const targetHint = h('div', { class: 'hint' });
+        const updateTargetHint = () => {
+          if (!f.time) { targetHint.textContent = ''; return; }
+          targetHint.textContent = f.target.base > 0 ? `= ${fmtMinutes(f.target.base)} a day` : 'in minutes';
+        };
         const targetInput = h('input', {
           class: 'input num', type: 'number', min: '0',
           step: f.dec ? '0.1' : '1', inputmode: f.dec ? 'decimal' : 'numeric',
         });
         targetInput.value = f.target.base || '';
-        targetInput.addEventListener('input', () => { f.target.base = parseFloat(targetInput.value) || 0; });
+        targetInput.addEventListener('input', () => {
+          f.target.base = parseFloat(targetInput.value) || 0;
+          updateTargetHint();
+        });
+        updateTargetHint();
 
         const chipsInput = h('input', {
           class: 'input num', type: 'text', inputmode: f.dec ? 'decimal' : 'numeric',
-          placeholder: 'e.g. 10, 15, 20',
+          placeholder: f.time ? 'e.g. 5, 10, 15, 30' : 'e.g. 10, 15, 20',
         });
         chipsInput.value = (f.chips || []).join(', ');
         chipsInput.addEventListener('input', () => {
@@ -149,16 +158,30 @@ export function openTrackerEditor(store, trackerId = null, presets = {}) {
         });
 
         counterBox.append(
-          h('div', { class: 'field-row' },
-            field('unit', unitInput),
-            field('daily target', targetInput, ''),
-          ),
-          switchRow('Decimal amounts', 'for distances like 2.5 km', !!f.dec, (on) => {
+          field('measures', segmented([
+            { value: 'num', label: 'Count' },
+            { value: 'time', label: 'Time' },
+          ], f.time ? 'time' : 'num', (v) => {
+            f.time = v === 'time';
+            if (f.time) { f.dec = false; f.unit = ''; }
+            renderCounterFields();
+            renderProg();
+          })),
+          f.time
+            ? h('div', {},
+                field('daily target (minutes)', targetInput),
+                targetHint)
+            : h('div', { class: 'field-row' },
+                field('unit', unitInput),
+                field('daily target', targetInput, ''),
+              ),
+          f.time ? null : switchRow('Decimal amounts', 'for distances like 2.5 km', !!f.dec, (on) => {
             f.dec = on;
             renderCounterFields();
             renderProg();
           }),
-          field('quick-add chips', chipsInput, 'comma-separated amounts shown as one-tap buttons'),
+          field(f.time ? 'quick-add chips (minutes)' : 'quick-add chips', chipsInput,
+            'comma-separated amounts shown as one-tap buttons'),
           field('target progression', segmented([
             { value: 'none', label: 'Off' },
             { value: 'daily', label: 'Daily' },

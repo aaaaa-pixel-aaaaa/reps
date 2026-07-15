@@ -65,7 +65,7 @@ export function openLogSheet(store, trackerId, dateKey = todayKey()) {
         inputmode: t.dec ? 'decimal' : 'numeric',
         step: t.dec ? '0.1' : '1',
         min: '0',
-        placeholder: unit ? `amount (${unit})` : 'amount',
+        placeholder: t.time ? 'amount (minutes)' : (unit ? `amount (${unit})` : 'amount'),
       });
       const customRow = h('div', { class: 'field-row', style: 'display:none;margin-top:2px' },
         h('div', { class: 'field', style: 'margin:0;flex:1' }, customInput),

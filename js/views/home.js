@@ -137,7 +137,7 @@ function trackerRow(store, t, today) {
       h('div', { class: 'trow-name' }, t.name,
         t.priority ? h('span', { class: 'trow-star', 'aria-label': 'pinned' }, icon('starFill')) : null),
       h('div', { class: 'trow-sub num' },
-        streak > 0 ? `\u{1F525} ${streak} day${streak === 1 ? '' : 's'}` : (t.type === 'habit' ? 'tap circle to check off' : (t.unit || 'counter')),
+        streak > 0 ? `\u{1F525} ${streak} day${streak === 1 ? '' : 's'}` : (t.type === 'habit' ? 'tap circle to check off' : (t.time ? 'minutes' : (t.unit || 'counter'))),
       )),
     t.type === 'counter'
       ? h('div', { class: 'trow-val num' }, fmtAmount(t, total), target > 0 ? h('small', {}, ` / ${fmtAmount(t, target)}`) : null)

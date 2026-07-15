@@ -50,8 +50,9 @@ function normalizeTracker(raw, i) {
     createdAt: isValidKey(raw.createdAt) ? raw.createdAt : todayKey(),
   };
   if (type === 'counter') {
-    t.unit = str(raw.unit, '').slice(0, 20);
-    t.dec = !!raw.dec;
+    t.time = !!raw.time; // amounts are minutes, shown as h/m
+    t.unit = t.time ? '' : str(raw.unit, '').slice(0, 20);
+    t.dec = t.time ? false : !!raw.dec;
     const tgRaw = raw.target && typeof raw.target === 'object' ? raw.target : {};
     const mode = ['none', 'daily', 'weekly'].includes(tgRaw.mode) ? tgRaw.mode : 'none';
     t.target = {
