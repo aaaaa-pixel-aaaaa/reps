@@ -8,6 +8,7 @@ import {
   longestStreak, trackerStats, todaySummary, fmtAmount,
 } from '../js/model.js';
 import { createStore, normalizeState, validateImport, seedState, demoState } from '../js/store.js';
+import { pinnedTrackers, groupTrackers, reorderContext } from '../js/model.js';
 import { wrapDelta, stepsFor, angleAt } from '../js/wheel.js';
 
 let passed = 0;
@@ -253,6 +254,56 @@ eq(effectiveTarget(counter(), '2026-07-14', { total: 10, sets: [] }), 50, 'no ov
   // Group delete ungroups trackers.
   store.deleteGroup('g_fitness');
   eq(store.state.trackers.t_run.groupId, null, 'group delete ungroups');
+}
+
+// ---------- pinned strip vs group ordering ----------
+{
+  const store = createStore({ storage: memStorage(), seed: () => seedState('2026-07-14') });
+  // groups list ALL their members now, pinned included
+  const fitness = groupTrackers(store.state, 'g_fitness').map((t) => t.id);
+  eq(fitness, ['t_pushups', 't_crunches', 't_run'], 'group shows pinned members too');
+  const ungrouped = groupTrackers(store.state, null).map((t) => t.id);
+  eq(ungrouped, ['t_stretch'], 'ungrouped shows its pinned member');
+
+  // pinning appends to the end of the strip
+  store.setTrackerPriority('t_run', true);
+  eq(pinnedTrackers(store.state).map((t) => t.id), ['t_pushups', 't_stretch', 't_run'],
+    'newly pinned joins strip end');
+
+  // reordering the strip does not change the group's internal order
+  const ctxPin = reorderContext(store.state, store.state.trackers.t_run, 'pinned');
+  eq(ctxPin.field, 'pinOrder', 'pinned context reorders pinOrder');
+  store.reorderTracker('t_run', -1, ctxPin.list, ctxPin.field);
+  eq(pinnedTrackers(store.state).map((t) => t.id), ['t_pushups', 't_run', 't_stretch'],
+    'strip reorder works');
+  eq(groupTrackers(store.state, 'g_fitness').map((t) => t.id),
+    ['t_pushups', 't_crunches', 't_run'], 'group order untouched by strip reorder');
+
+  // reordering inside the group does not change the strip
+  const ctxGrp = reorderContext(store.state, store.state.trackers.t_run, 'group');
+  eq(ctxGrp.field, 'order', 'group context reorders order');
+  store.reorderTracker('t_run', -1, ctxGrp.list, ctxGrp.field);
+  eq(groupTrackers(store.state, 'g_fitness').map((t) => t.id),
+    ['t_pushups', 't_run', 't_crunches'], 'group reorder works');
+  eq(pinnedTrackers(store.state).map((t) => t.id), ['t_pushups', 't_run', 't_stretch'],
+    'strip untouched by group reorder');
+
+  // unpin + repin lands at the end again
+  store.setTrackerPriority('t_run', false);
+  store.setTrackerPriority('t_run', true);
+  eq(pinnedTrackers(store.state).map((t) => t.id), ['t_pushups', 't_stretch', 't_run'],
+    'repin appends to strip end');
+
+  // editor-path pinning (updateTracker) appends too
+  store.updateTracker('t_crunches', { priority: true });
+  eq(pinnedTrackers(store.state).map((t) => t.id),
+    ['t_pushups', 't_stretch', 't_run', 't_crunches'], 'updateTracker pin appends');
+
+  // legacy data without pinOrder falls back to order
+  const legacy = normalizeState(JSON.parse(JSON.stringify(seedState('2026-07-14')), (k, v) =>
+    k === 'pinOrder' ? undefined : v));
+  eq(pinnedTrackers(legacy).map((t) => t.id), ['t_pushups', 't_stretch'],
+    'missing pinOrder defaults sanely');
 }
 
 // ---------- persistence roundtrip ----------

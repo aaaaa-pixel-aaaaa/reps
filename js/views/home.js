@@ -90,7 +90,7 @@ function counterCard(store, t, today) {
     tabindex: '0',
     onclick: () => openLogSheet(store, t.id),
   },
-    h('button', { class: 'dots', 'aria-label': `${t.name} options`, onclick: (e) => { e.stopPropagation(); openTrackerOptions(store, t.id); } }, icon('dots')),
+    h('button', { class: 'dots', 'aria-label': `${t.name} options`, onclick: (e) => { e.stopPropagation(); openTrackerOptions(store, t.id, 'pinned'); } }, icon('dots')),
     h('div', { class: 'ringbox' }, ring,
       h('div', { class: 'ring-label' },
         h('div', { class: 'ring-val num' }, fmtAmount(t, total)),
@@ -109,7 +109,7 @@ function habitCard(store, t, today) {
     tabindex: '0',
     onclick: goHistory(t),
   },
-    h('button', { class: 'dots', 'aria-label': `${t.name} options`, onclick: (e) => { e.stopPropagation(); openTrackerOptions(store, t.id); } }, icon('dots')),
+    h('button', { class: 'dots', 'aria-label': `${t.name} options`, onclick: (e) => { e.stopPropagation(); openTrackerOptions(store, t.id, 'pinned'); } }, icon('dots')),
     checkButton(store, t, today, 'habit-check'),
     h('div', { class: 'card-name' }, t.name),
     streakChip(t, store.state.days, today, goHistory(t)),
@@ -134,21 +134,20 @@ function trackerRow(store, t, today) {
   },
     lead,
     h('div', { class: 'trow-main' },
-      h('div', { class: 'trow-name' }, t.name),
+      h('div', { class: 'trow-name' }, t.name,
+        t.priority ? h('span', { class: 'trow-star', 'aria-label': 'pinned' }, icon('starFill')) : null),
       h('div', { class: 'trow-sub num' },
         streak > 0 ? `\u{1F525} ${streak} day${streak === 1 ? '' : 's'}` : (t.type === 'habit' ? 'tap circle to check off' : (t.unit || 'counter')),
       )),
     t.type === 'counter'
       ? h('div', { class: 'trow-val num' }, fmtAmount(t, total), target > 0 ? h('small', {}, ` / ${fmtAmount(t, target)}`) : null)
       : null,
-    h('button', { class: 'dots', 'aria-label': `${t.name} options`, onclick: (e) => { e.stopPropagation(); openTrackerOptions(store, t.id); } }, icon('dots')),
+    h('button', { class: 'dots', 'aria-label': `${t.name} options`, onclick: (e) => { e.stopPropagation(); openTrackerOptions(store, t.id, 'group'); } }, icon('dots')),
   );
 }
 
 function groupSection(store, g, today) {
-  const members = Object.values(store.state.trackers).filter((t) => !t.archived && t.groupId === g.id);
-  const rows = groupTrackers(store.state, g.id);
-  const pinnedCount = members.length - rows.length;
+  const members = groupTrackers(store.state, g.id);
   return h('section', { class: `group ${g.collapsed ? 'collapsed' : ''}`, style: accentStyle(g.color) },
     h('div', {
       class: 'group-head',
@@ -165,10 +164,10 @@ function groupSection(store, g, today) {
       h('span', { class: 'group-chev' }, icon('chevD')),
     ),
     g.collapsed ? null : h('div', { class: 'group-body' },
-      rows.length
-        ? rows.map((t) => trackerRow(store, t, today))
+      members.length
+        ? members.map((t) => trackerRow(store, t, today))
         : h('div', { class: 'empty-note', style: 'padding:14px;font-size:13.5px' },
-            pinnedCount > 0 ? 'Everything here is pinned above' : 'No trackers yet — add one from below'),
+            'No trackers yet — add one from below'),
     ),
   );
 }

@@ -160,15 +160,19 @@ export function activeTrackers(state) {
   return Object.values(state.trackers).filter((t) => !t.archived);
 }
 
-// Priority trackers, pinned to the top of Home.
+// Priority trackers, pinned to the top of Home. The strip has its own
+// ordering (pinOrder) independent of positions inside groups.
 export function pinnedTrackers(state) {
-  return activeTrackers(state).filter((t) => t.priority).sort(byOrder);
+  return activeTrackers(state)
+    .filter((t) => t.priority)
+    .sort((a, b) => ((a.pinOrder ?? a.order) - (b.pinOrder ?? b.order)) || byOrder(a, b));
 }
 
-// Non-priority trackers inside a group (groupId null = ungrouped).
+// All trackers inside a group (groupId null = ungrouped), pinned included —
+// pinning surfaces a tracker on Home, it doesn't remove it from its group.
 export function groupTrackers(state, groupId) {
   return activeTrackers(state)
-    .filter((t) => !t.priority && (t.groupId || null) === (groupId || null))
+    .filter((t) => (t.groupId || null) === (groupId || null))
     .sort(byOrder);
 }
 
@@ -178,10 +182,13 @@ export function sortedGroups(state) {
   );
 }
 
-// The list a tracker is reordered within: pinned strip if priority,
-// otherwise its group (or ungrouped) section.
-export function siblingsOf(state, tracker) {
-  return tracker.priority ? pinnedTrackers(state) : groupTrackers(state, tracker.groupId);
+// What "move up/down" operates on, given where the menu was opened from:
+// the pinned strip reorders pinOrder, a group section reorders order.
+export function reorderContext(state, tracker, context) {
+  if (context === 'pinned' && tracker.priority) {
+    return { list: pinnedTrackers(state), field: 'pinOrder' };
+  }
+  return { list: groupTrackers(state, tracker.groupId), field: 'order' };
 }
 
 // Today's headline: how many goals are hit out of those that exist today.

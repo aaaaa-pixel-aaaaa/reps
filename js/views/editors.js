@@ -2,7 +2,7 @@
 // (pin, reorder, move to group, archive, delete).
 
 import { todayKey, isValidKey } from '../dates.js';
-import { siblingsOf, sortedGroups } from '../model.js';
+import { reorderContext, sortedGroups } from '../model.js';
 import { PALETTE } from '../store.js';
 import { h, icon, haptic, openSheet, confirmSheet, toast } from '../ui.js';
 
@@ -261,9 +261,12 @@ export function openGroupEditor(store, groupId = null, onSaved = null) {
 
 // ---- tracker options ----
 
-export function openTrackerOptions(store, trackerId) {
+// `context` says which list the menu was opened from — 'pinned' (Home strip)
+// or 'group' (a group section) — so Move up/down reorders what you're seeing.
+export function openTrackerOptions(store, trackerId, context) {
   const t = store.state.trackers[trackerId];
   if (!t) return;
+  if (!context) context = t.priority ? 'pinned' : 'group';
 
   openSheet({
     title: t.name,
@@ -285,7 +288,8 @@ export function openTrackerOptions(store, trackerId) {
 
       const move = (dir) => () => {
         const cur = store.state.trackers[trackerId];
-        const moved = store.reorderTracker(trackerId, dir, siblingsOf(store.state, cur));
+        const { list, field } = reorderContext(store.state, cur, context);
+        const moved = store.reorderTracker(trackerId, dir, list, field);
         haptic(moved ? 10 : 0);
         if (!moved) toast(dir < 0 ? 'Already first' : 'Already last');
       };

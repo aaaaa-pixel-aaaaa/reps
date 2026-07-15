@@ -46,6 +46,7 @@ function normalizeTracker(raw, i) {
     priority: !!raw.priority,
     archived: !!raw.archived,
     order: num(raw.order, i),
+    pinOrder: num(raw.pinOrder, num(raw.order, i)),
     createdAt: isValidKey(raw.createdAt) ? raw.createdAt : todayKey(),
   };
   if (type === 'counter') {
@@ -347,6 +348,15 @@ export function createStore({ storage, key = STORAGE_KEY, seed = seedState } = {
     return max + 1;
   }
 
+  // Newly pinned trackers join the end of the pinned strip.
+  function nextPinOrder(exceptId) {
+    let max = -1;
+    for (const t of Object.values(state.trackers)) {
+      if (t.priority && t.id !== exceptId && t.pinOrder > max) max = t.pinOrder;
+    }
+    return max + 1;
+  }
+
   const api = {
     get state() { return state; },
     subscribe(fn) {
@@ -370,6 +380,7 @@ export function createStore({ storage, key = STORAGE_KEY, seed = seedState } = {
       if (!cur) return;
       const next = normalizeTracker({ ...cur, ...patch, id, type: cur.type }, 0);
       next.order = cur.order;
+      if (!cur.priority && next.priority) next.pinOrder = nextPinOrder(id);
       if (next.groupId && !state.groups[next.groupId]) next.groupId = null;
       state.trackers[id] = next;
       commit();
@@ -377,6 +388,7 @@ export function createStore({ storage, key = STORAGE_KEY, seed = seedState } = {
     setTrackerPriority(id, priority) {
       const t = tracker(id);
       if (!t) return;
+      if (!t.priority && priority) t.pinOrder = nextPinOrder(id);
       t.priority = !!priority;
       commit();
     },
@@ -403,15 +415,17 @@ export function createStore({ storage, key = STORAGE_KEY, seed = seedState } = {
       }
       commit();
     },
-    // Swap with the neighbor in the given displayed sibling list.
-    reorderTracker(id, dir, siblings) {
+    // Swap with the neighbor in the given displayed sibling list. `field`
+    // is 'order' (position in group) or 'pinOrder' (position in the pinned
+    // strip) so the two lists reorder independently.
+    reorderTracker(id, dir, siblings, field = 'order') {
       const idx = siblings.findIndex((t) => t.id === id);
       const j = idx + dir;
       if (idx < 0 || j < 0 || j >= siblings.length) return false;
-      siblings.forEach((t, i) => { state.trackers[t.id].order = i; });
+      siblings.forEach((t, i) => { state.trackers[t.id][field] = i; });
       const a = state.trackers[siblings[idx].id];
       const b = state.trackers[siblings[j].id];
-      [a.order, b.order] = [b.order, a.order];
+      [a[field], b[field]] = [b[field], a[field]];
       commit();
       return true;
     },
