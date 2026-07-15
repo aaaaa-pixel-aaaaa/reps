@@ -157,7 +157,8 @@ export function openTrackerEditor(store, trackerId = null, presets = {}) {
             .filter((n) => isFinite(n) && n > 0).slice(0, 8);
         });
 
-        counterBox.append(
+        // native append() stringifies null — filter it, unlike h() which skips it
+        counterBox.append(...[
           field('measures', segmented([
             { value: 'num', label: 'Count' },
             { value: 'time', label: 'Time' },
@@ -192,7 +193,7 @@ export function openTrackerEditor(store, trackerId = null, presets = {}) {
             renderProg();
           })),
           progBox,
-        );
+        ].filter(Boolean));
         renderProg();
       }
 
@@ -204,7 +205,7 @@ export function openTrackerEditor(store, trackerId = null, presets = {}) {
       groupSelect.value = f.groupId || '';
       groupSelect.addEventListener('change', () => { f.groupId = groupSelect.value || null; });
 
-      body.append(
+      body.append(...[
         field('name', nameInput),
         existing
           ? null
@@ -237,7 +238,7 @@ export function openTrackerEditor(store, trackerId = null, presets = {}) {
             api.close();
           },
         }, existing ? 'Save changes' : 'Create tracker'),
-      );
+      ].filter(Boolean));
       renderCounterFields();
       if (!existing) setTimeout(() => nameInput.focus(), 350);
     },
