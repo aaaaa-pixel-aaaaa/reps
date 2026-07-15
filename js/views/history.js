@@ -8,7 +8,7 @@ import {
 } from '../dates.js';
 import {
   entryFor, effectiveTarget, isHit, dayStatus, trackerStats, firstDayKey,
-  fmtAmount, habitCount, habitTarget,
+  fmtAmount, habitCount, habitTarget, hitIntensity,
 } from '../model.js';
 import { h, icon, accentStyle, haptic, ringSVG } from '../ui.js';
 import { openDayEditor } from './day-editor.js';
@@ -161,10 +161,17 @@ function calendar(store, t, cur, today) {
           const status = dayStatus(t, days, key, today);
           const entry = entryFor(days, key, t.id);
           const overridden = !!(entry && entry.goalOverride != null);
+          // Cells that hit their goal get progressively more saturated the
+          // further past it they landed, capping out around 3x the target.
+          const boost = status === 'hit' ? hitIntensity(t, entry, key) : 0;
+          const style = boost > 0
+            ? `filter:saturate(${(1 + boost * 1.4).toFixed(2)}) brightness(${(1 + boost * 0.12).toFixed(2)})`
+            : undefined;
           return h('button', {
             class: `cal-cell num ${status} ${key === today ? 'today' : ''}`,
+            style,
             disabled: status === 'future',
-            'aria-label': `${key}: ${status}`,
+            'aria-label': `${key}: ${status}${boost > 0.5 ? ', well past goal' : ''}`,
             onclick: () => openDayEditor(store, t.id, key),
           }, String(Number(key.slice(8))), overridden ? h('span', { class: 'ovr' }) : null);
         })),
@@ -179,6 +186,7 @@ function legend(t) {
   const item = (style, label) => h('span', {}, h('i', { style }), label);
   return h('div', { class: 'cal-legend' },
     item('background:var(--c)', t.type === 'habit' ? 'done' : 'goal hit'),
+    item('background:var(--c);filter:saturate(2.4) brightness(1.12)', 'exceeded'),
     t.type === 'counter' || (t.perDay || 1) > 1 ? item('background:var(--c-25)', 'partial') : null,
     item('background:rgba(228,87,61,0.28)', 'missed'),
     item('background:transparent;border:1px solid var(--line)', 'empty'),

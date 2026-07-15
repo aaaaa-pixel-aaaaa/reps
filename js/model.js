@@ -76,6 +76,28 @@ export function isHit(tracker, entry, dateKey) {
   return target > 0 ? total >= target : total > 0;
 }
 
+// How far a hit day exceeded its goal, as 0 (exactly on target) approaching
+// 1 (never quite reaching it) around 3x the goal. The curve front-loads the
+// climb — 1x to 2x moves it a lot more than 2x to 3x — so the calendar can
+// deepen "goal hit" into "goal crushed" without the base hit colour ever
+// looking washed out.
+export function hitIntensity(tracker, entry, dateKey) {
+  if (!entry) return 0;
+  let ratio;
+  if (tracker.type === 'habit') {
+    const per = habitTarget(tracker, entry);
+    if (per <= 0) return 0;
+    ratio = habitCount(entry) / per;
+  } else {
+    const target = effectiveTarget(tracker, dateKey, entry);
+    if (target <= 0) return 0;
+    ratio = (entry.total || 0) / target;
+  }
+  if (ratio <= 1) return 0;
+  const x = Math.min(ratio - 1, 2); // input caps out at 3x the goal
+  return (1 - Math.exp(-1.5 * x)) / (1 - Math.exp(-3));
+}
+
 // Earliest day with any entry for this tracker (or null).
 export function firstLogKey(tracker, days) {
   let first = null;

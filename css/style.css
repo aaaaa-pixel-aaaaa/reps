@@ -149,6 +149,22 @@ input, select, textarea { font: inherit; color: inherit; }
 }
 .card .dots:active { background: var(--raise2); color: var(--text); }
 
+.card-timer {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--c);
+}
+.card-timer i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); animation: timerpulse 1.4s ease-in-out infinite; }
+.trow-timer { color: var(--c) !important; }
+
 .card-name {
   font-size: 14px;
   font-weight: 700;
@@ -611,6 +627,28 @@ input[type="date"].input { line-height: 48px; }
   pointer-events: none;
 }
 .wheel-flashring.go { animation: wheelflash 0.5s ease-out; }
+
+.timerbox {
+  margin: 14px 0 0;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--raise2);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.timerbox.running { border-color: var(--c-40); }
+.timer-lbl {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 12px; color: var(--faint); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.timer-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); animation: timerpulse 1.4s ease-in-out infinite; }
+@keyframes timerpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.timer-live { font-size: 34px; font-weight: 800; letter-spacing: -0.02em; color: var(--c); text-shadow: 0 0 16px var(--c-40); }
+.timer-actions { display: flex; flex-direction: column; gap: 8px; width: 100%; }
 
 .log-actions { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
 

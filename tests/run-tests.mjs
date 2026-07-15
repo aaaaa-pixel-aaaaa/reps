@@ -6,7 +6,7 @@ import {
 import {
   computedTarget, effectiveTarget, isHit, dayStatus, currentStreak,
   longestStreak, trackerStats, todaySummary, fmtAmount, fmtMinutes,
-  habitCount, habitTarget,
+  habitCount, habitTarget, hitIntensity,
 } from '../js/model.js';
 import { createStore, normalizeState, validateImport, seedState, demoState } from '../js/store.js';
 import { pinnedTrackers, groupTrackers, reorderContext } from '../js/model.js';
@@ -325,6 +325,87 @@ eq(fmtMinutes(-5), '-5m', 'negative correction');
     '2026-07-14': { h3: { count: 1 } },
   };
   eq(currentStreak(h3, hdays, '2026-07-14'), 2, 'unfinished today does not break streak');
+}
+
+// ---------- goal-exceeded colour intensity ----------
+{
+  const round3 = (x) => Math.round(x * 1000) / 1000;
+  const c = { id: 'c1', type: 'counter', target: { base: 10, mode: 'none' } };
+  eq(hitIntensity(c, { total: 10 }, '2026-07-10'), 0, 'exactly on target: no boost');
+  eq(hitIntensity(c, { total: 9 }, '2026-07-10'), 0, 'under target: no boost');
+  eq(round3(hitIntensity(c, { total: 20 }, '2026-07-10')), 0.818, 'double the goal: most of the climb');
+  eq(round3(hitIntensity(c, { total: 30 }, '2026-07-10')), 1, 'triple the goal reaches max');
+  eq(round3(hitIntensity(c, { total: 60 }, '2026-07-10')), 1, 'far past goal stays capped at max');
+  eq(hitIntensity(c, { total: 15, goalOverride: 0 }, '2026-07-10'), 0, 'declared rest day has no target to exceed');
+  eq(hitIntensity(c, undefined, '2026-07-10'), 0, 'no entry: no boost');
+
+  const h3i = { id: 'h3i', type: 'habit', perDay: 2 };
+  eq(hitIntensity(h3i, { count: 2 }, '2026-07-10'), 0, 'habit exactly at perDay: no boost');
+  eq(round3(hitIntensity(h3i, { count: 4 }, '2026-07-10')), 0.818, 'habit double-checked: most of the climb');
+
+  const step1 = hitIntensity(c, { total: 20 }, '2026-07-10') - hitIntensity(c, { total: 10 }, '2026-07-10');
+  const step2 = hitIntensity(c, { total: 30 }, '2026-07-10') - hitIntensity(c, { total: 20 }, '2026-07-10');
+  ok(step1 > step2, 'asymptotic curve: 1x-2x increases more than 2x-3x');
+}
+
+// ---------- live timer ----------
+{
+  const store = createStore({ storage: memStorage(), seed: () => seedState('2026-07-14') });
+  const tid = store.addTracker({ name: 'Focus', type: 'counter', time: true });
+
+  const habitId = store.addTracker({ name: 'Walk', type: 'habit' });
+  store.startTimer(habitId);
+  eq(store.state.timers[habitId], undefined, 'timer refuses a non-time tracker');
+  const plainId = store.addTracker({ name: 'Reps', type: 'counter' });
+  store.startTimer(plainId);
+  eq(store.state.timers[plainId], undefined, 'timer refuses a non-timed counter');
+
+  eq(store.state.timers[tid], undefined, 'no timer running initially');
+  store.startTimer(tid);
+  ok(store.state.timers[tid] && isFinite(store.state.timers[tid].startedAt), 'timer recorded with a start time');
+  const first = store.state.timers[tid].startedAt;
+  store.startTimer(tid); // already running: no-op
+  eq(store.state.timers[tid].startedAt, first, 'starting again does not reset an already-running timer');
+
+  // rewind the recorded start to simulate 42.5 minutes having elapsed —
+  // this is exactly what surviving a closed app for that long looks like,
+  // since elapsed time is always just Date.now() minus this timestamp
+  store.state.timers[tid].startedAt = Date.now() - 42.5 * 60000;
+  const mins = store.stopTimer(tid, '2026-07-14');
+  eq(mins, 43, 'stop rounds elapsed minutes');
+  eq(store.state.days['2026-07-14'][tid].total, 43, 'elapsed minutes logged as a set');
+  eq(store.state.timers[tid], undefined, 'timer cleared after stopping');
+
+  store.startTimer(tid);
+  store.cancelTimer(tid);
+  eq(store.state.timers[tid], undefined, 'cancel clears the timer');
+  eq(store.state.days['2026-07-14'][tid].total, 43, 'cancel does not log anything');
+
+  eq(store.stopTimer(tid, '2026-07-14'), null, 'stopping with nothing running is a no-op');
+
+  // persists across a reload (a fresh store reading the same storage), not
+  // just held in memory
+  const storage = memStorage();
+  const s1 = createStore({ storage, seed: () => seedState('2026-07-14') });
+  const tid2 = s1.addTracker({ name: 'Read', type: 'counter', time: true });
+  s1.startTimer(tid2);
+  const startedAt = s1.state.timers[tid2].startedAt;
+  const s2 = createStore({ storage, seed: () => { throw new Error('should not reseed'); } });
+  eq(s2.state.timers[tid2] && s2.state.timers[tid2].startedAt, startedAt,
+    'timer persists across reload with its original start time');
+
+  // deleting a tracker drops any timer running for it
+  const tid3 = store.addTracker({ name: 'Cook', type: 'counter', time: true });
+  store.startTimer(tid3);
+  store.deleteTracker(tid3);
+  eq(store.state.timers[tid3], undefined, 'deleting a tracker drops its timer');
+
+  // normalizeState drops timers for non-time trackers and unknown ids
+  const bad = normalizeState({
+    trackers: { p: { id: 'p', name: 'Push-ups', type: 'counter' } },
+    timers: { p: { startedAt: Date.now() }, ghost: { startedAt: Date.now() } },
+  });
+  eq(bad.timers, {}, 'timer dropped for a non-time counter and an unknown tracker');
 }
 
 // ---------- pinned strip vs group ordering ----------

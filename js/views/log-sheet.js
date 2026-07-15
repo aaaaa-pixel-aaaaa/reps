@@ -18,10 +18,11 @@ export function openLogSheet(store, trackerId, dateKey = todayKey()) {
   const unit = t.unit || '';
 
   let unsub = null;
+  let timerTick = null;
   openSheet({
     title: t.name + (isToday ? '' : ` · ${shortDate(dateKey)}`),
     accent: t.color,
-    onClose: () => unsub && unsub(),
+    onClose: () => { unsub && unsub(); if (timerTick) clearInterval(timerTick); },
     build(body, api) {
       const log = (amount) =>
         store.logSet(t.id, dateKey, amount, stampFor(dateKey, entryFor(store.state.days, dateKey, t.id)));
@@ -42,6 +43,60 @@ export function openLogSheet(store, trackerId, dateKey = todayKey()) {
         onRev: () => haptic(12),
       });
       wheel.format = fmt;
+
+      // Live timer, only offered against today — a start timestamp always
+      // resolves against "now", which only makes sense for the current day.
+      // It needs no ticking to survive the app closing or the phone locking:
+      // elapsed time is just Date.now() minus the stored start, re-read
+      // whenever the sheet repaints.
+      const timerBox = t.time && isToday ? h('div', { class: 'timerbox' }) : null;
+      function paintTimer() {
+        if (!timerBox) return;
+        if (timerTick) { clearInterval(timerTick); timerTick = null; }
+        const running = store.state.timers[t.id];
+        if (running) {
+          const live = h('div', { class: 'timer-live num' }, '0:00');
+          const tick = () => {
+            const secs = Math.max(0, Math.floor((Date.now() - running.startedAt) / 1000));
+            const hh = Math.floor(secs / 3600);
+            const mm = Math.floor((secs % 3600) / 60);
+            const ss = secs % 60;
+            live.textContent = hh > 0
+              ? `${hh}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`
+              : `${mm}:${String(ss).padStart(2, '0')}`;
+          };
+          tick();
+          timerTick = setInterval(tick, 1000);
+          timerBox.className = 'timerbox running';
+          timerBox.replaceChildren(
+            h('div', { class: 'timer-lbl' }, h('span', { class: 'timer-dot' }), 'timer running'),
+            live,
+            h('div', { class: 'timer-actions' },
+              h('button', {
+                class: 'btn btn-accent',
+                onclick: () => {
+                  const mins = store.stopTimer(t.id, dateKey);
+                  haptic(18);
+                  if (mins) toast(`Logged ${fmt(mins)}`);
+                },
+              }, 'Stop & log'),
+              h('button', {
+                class: 'linklike',
+                onclick: () => { store.cancelTimer(t.id); haptic(8); },
+              }, 'Cancel — discard'),
+            ),
+          );
+        } else {
+          timerBox.className = 'timerbox';
+          timerBox.replaceChildren(
+            h('div', { class: 'timer-lbl' }, 'or track live'),
+            h('button', {
+              class: 'btn btn-ghost',
+              onclick: () => { store.startTimer(t.id); haptic(12); },
+            }, 'Start timer'),
+          );
+        }
+      }
 
       const addBtn = h('button', {
         class: 'btn btn-accent',
@@ -120,10 +175,11 @@ export function openLogSheet(store, trackerId, dateKey = todayKey()) {
         onclick: () => { api.close(); openDayEditor(store, t.id, dateKey); },
       }, 'Edit this day');
 
-      body.append(
+      body.append(...[
         h('div', { class: 'log-today' }, totalEl, goalEl),
         metaEl,
         wheel.el,
+        timerBox,
         h('div', { class: 'log-actions' },
           addBtn,
           chips.length ? h('div', { class: 'chips', style: 'justify-content:center' }, chips) : null,
@@ -136,11 +192,12 @@ export function openLogSheet(store, trackerId, dateKey = todayKey()) {
           undoBtn,
           editDay,
         ),
-      );
+      ].filter(Boolean));
 
       let lastTotal = null;
       let wasDone = null;
       function update() {
+        paintTimer();
         const entry = entryFor(store.state.days, dateKey, t.id);
         const total = entry ? entry.total || 0 : 0;
         const target = effectiveTarget(t, dateKey, entry);

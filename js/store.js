@@ -151,6 +151,19 @@ export function normalizeState(raw) {
     lastBackup: isValidKey(metaSrc.lastBackup) ? metaSrc.lastBackup : null,
     createdAt: isValidKey(metaSrc.createdAt) ? metaSrc.createdAt : todayKey(),
   };
+
+  // Live timers: a plain timestamp per tracker. Surviving a reload/backgrounded
+  // phone needs no ticking anything — elapsed time is just Date.now() minus
+  // this, computed whenever it's next read.
+  const timersSrc = src.timers && typeof src.timers === 'object' ? src.timers : {};
+  state.timers = {};
+  for (const tid in timersSrc) {
+    const tracker = state.trackers[tid];
+    const raw = timersSrc[tid];
+    if (tracker && tracker.type === 'counter' && tracker.time && raw && isFinite(raw.startedAt)) {
+      state.timers[tid] = { startedAt: raw.startedAt };
+    }
+  }
   return state;
 }
 
@@ -414,6 +427,7 @@ export function createStore({ storage, key = STORAGE_KEY, seed = seedState } = {
     deleteTracker(id) {
       if (!tracker(id)) return;
       delete state.trackers[id];
+      delete state.timers[id];
       for (const dateKey of Object.keys(state.days)) {
         delete state.days[dateKey][id];
         if (!Object.keys(state.days[dateKey]).length) delete state.days[dateKey];
@@ -567,6 +581,40 @@ export function createStore({ storage, key = STORAGE_KEY, seed = seedState } = {
       if (v > 0) entry.count = v; else delete entry.count;
       delete entry.done;
       cleanupDay(dateKey, tid);
+      commit();
+    },
+    // Live timer for a time counter. Only one runs per tracker at a time;
+    // the tracker id maps straight to a start timestamp, so it needs no
+    // interval anywhere — closing the app, locking the phone, or a service
+    // worker restart can't lose it, only clearing storage can.
+    startTimer(tid) {
+      const t = tracker(tid);
+      if (!t || t.type !== 'counter' || !t.time || state.timers[tid]) return;
+      state.timers[tid] = { startedAt: Date.now() };
+      commit();
+    },
+    // Stops a running timer and logs the whole elapsed minutes against
+    // dateKey (today, unless the caller is closing out a session that ran
+    // past midnight). Returns the minutes logged, or null if none was running.
+    stopTimer(tid, dateKey = todayKey()) {
+      const running = state.timers[tid];
+      if (!running) return null;
+      delete state.timers[tid];
+      const t = tracker(tid);
+      const mins = Math.round((Date.now() - running.startedAt) / 60000);
+      if (t && mins > 0) {
+        const entry = dayEntry(dateKey, tid, true);
+        entry.sets.push({ a: mins, t: Date.now() });
+        entry.total = recomputeTotal(t, entry.sets);
+        cleanupDay(dateKey, tid);
+      }
+      commit();
+      return mins;
+    },
+    // Discards a running timer without logging anything (started by mistake).
+    cancelTimer(tid) {
+      if (!state.timers[tid]) return;
+      delete state.timers[tid];
       commit();
     },
     setGoalOverride(tid, dateKey, value) {

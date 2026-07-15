@@ -96,6 +96,7 @@ function counterCard(store, t, today) {
   const total = entry ? entry.total || 0 : 0;
   const done = isHit(t, entry, today);
   const ring = animatedRing(t, 108, 10, counterProgress(t, entry, today));
+  const timing = t.time && store.state.timers[t.id];
   return h('div', {
     class: `card pressable ${done ? 'done' : ''}`,
     style: accentStyle(t.color),
@@ -103,6 +104,7 @@ function counterCard(store, t, today) {
     tabindex: '0',
     onclick: () => openLogSheet(store, t.id),
   },
+    timing ? h('span', { class: 'card-timer' }, h('i', {}), 'timer') : null,
     h('button', { class: 'dots', 'aria-label': `${t.name} options`, onclick: (e) => { e.stopPropagation(); openTrackerOptions(store, t.id, 'pinned'); } }, icon('dots')),
     h('div', { class: 'ringbox' }, ring,
       h('div', { class: 'ring-label' },
@@ -138,6 +140,7 @@ function trackerRow(store, t, today) {
   const target = t.type === 'counter' ? effectiveTarget(t, today, entry) : 0;
   const total = entry ? entry.total || 0 : 0;
   const streak = currentStreak(t, store.state.days, today);
+  const timing = t.time && store.state.timers[t.id];
   return h('div', {
     class: `trow ${done ? 'done' : ''}`,
     style: accentStyle(t.color),
@@ -149,8 +152,9 @@ function trackerRow(store, t, today) {
     h('div', { class: 'trow-main' },
       h('div', { class: 'trow-name' }, t.name,
         t.priority ? h('span', { class: 'trow-star', 'aria-label': 'pinned' }, icon('starFill')) : null),
-      h('div', { class: 'trow-sub num' },
-        streak > 0 ? `\u{1F525} ${streak} day${streak === 1 ? '' : 's'}`
+      h('div', { class: `trow-sub num ${timing ? 'trow-timer' : ''}` },
+        timing ? '⏱ timer running'
+          : streak > 0 ? `\u{1F525} ${streak} day${streak === 1 ? '' : 's'}`
           : (t.type === 'habit'
               ? (habitTarget(t, entry) > 1 ? `${habitCount(entry)} of ${habitTarget(t, entry)} today` : 'tap circle to check off')
               : (t.time ? 'minutes' : (t.unit || 'counter'))),
