@@ -8,7 +8,7 @@ import {
 } from '../dates.js';
 import {
   entryFor, effectiveTarget, isHit, dayStatus, trackerStats, firstDayKey,
-  fmtAmount, currentStreak,
+  fmtAmount, habitCount, habitTarget,
 } from '../model.js';
 import { h, icon, accentStyle, haptic, ringSVG } from '../ui.js';
 import { openDayEditor } from './day-editor.js';
@@ -67,16 +67,18 @@ function hero(store, t, today, stats) {
       ? `${fmtAmount(t, total)} / ${fmtAmount(t, target)}${t.unit ? ' ' + t.unit : ''} today`
       : `${fmtAmount(t, total)}${t.unit ? ' ' + t.unit : ''} today`;
   } else {
+    const count = habitCount(entry);
+    const per = habitTarget(t, entry);
     leftEl = h('button', {
-      class: `habit-check ${done ? 'done' : ''}`,
+      class: `habit-check ${done ? 'done' : ''} ${!done && count > 0 ? 'part' : ''}`,
       style: 'margin:0;width:88px;height:88px',
-      'aria-label': 'toggle today',
+      'aria-label': per > 1 ? `${count} of ${per} today — tap to add one` : 'toggle today',
       onclick: (e) => {
         const nowDone = store.toggleHabit(t.id, todayKey());
         haptic(nowDone ? [12, 50, 16] : 8);
       },
-    }, icon('check'));
-    line1 = done ? 'Done today ✓' : 'Not done yet today';
+    }, done || per <= 1 ? icon('check') : h('span', { class: 'hc-count num' }, `${count}/${per}`));
+    line1 = done ? 'Done today ✓' : (per > 1 ? `${count} of ${per} today` : 'Not done yet today');
   }
   const totalLine = t.type === 'counter'
     ? `${fmtAmount(t, stats.total)}${t.unit ? ' ' + t.unit : ''} all-time`
@@ -177,7 +179,7 @@ function legend(t) {
   const item = (style, label) => h('span', {}, h('i', { style }), label);
   return h('div', { class: 'cal-legend' },
     item('background:var(--c)', t.type === 'habit' ? 'done' : 'goal hit'),
-    t.type === 'counter' ? item('background:var(--c-25)', 'partial') : null,
+    t.type === 'counter' || (t.perDay || 1) > 1 ? item('background:var(--c-25)', 'partial') : null,
     item('background:rgba(228,87,61,0.28)', 'missed'),
     item('background:transparent;border:1px solid var(--line)', 'empty'),
   );
@@ -213,7 +215,10 @@ function dayLog(store, t, today) {
             `${s.a > 0 ? '+' : ''}${fmtAmount(t, s.a)} · ${timeOf(s.t)}`)));
       }
     } else {
-      right = h('div', { class: 'dl-total num' }, entry.done ? '✓' : '–');
+      const count = habitCount(entry);
+      const per = habitTarget(t, entry);
+      right = h('div', { class: 'dl-total num' },
+        hit ? (per > 1 ? `${count}/${per} ✓` : '✓') : (count > 0 ? `${count}/${per}` : '–'));
     }
     return h('button', { class: 'dl', onclick: () => openDayEditor(store, t.id, key) },
       h('div', { class: 'dl-head' },

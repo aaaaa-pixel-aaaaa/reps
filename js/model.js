@@ -49,15 +49,29 @@ export function entryFor(days, dateKey, trackerId) {
   return day ? day[trackerId] : undefined;
 }
 
+// How many times a habit was checked off that day. Older data stored
+// {done: true}, which reads as one check.
+export function habitCount(entry) {
+  if (!entry) return 0;
+  if (entry.count != null) return entry.count;
+  return entry.done ? 1 : 0;
+}
+
+// Checks needed to complete a habit that day (per-day override wins).
+export function habitTarget(tracker, entry) {
+  if (entry && entry.goalOverride != null) return entry.goalOverride;
+  return Math.max(1, tracker.perDay || 1);
+}
+
 // Did this day meet its goal?
-// - habit: done
+// - target 0 via explicit override: a declared rest day, always met
+// - habit: checked off at least its times-per-day
 // - counter with a positive target: total >= target
-// - counter with target 0 via explicit override: a declared rest day, always met
 // - counter with no target at all: any activity counts
 export function isHit(tracker, entry, dateKey) {
-  if (tracker.type === 'habit') return !!(entry && entry.done);
-  const target = effectiveTarget(tracker, dateKey, entry);
   if (entry && entry.goalOverride === 0) return true;
+  if (tracker.type === 'habit') return habitCount(entry) >= habitTarget(tracker, entry);
+  const target = effectiveTarget(tracker, dateKey, entry);
   const total = entry ? entry.total || 0 : 0;
   return target > 0 ? total >= target : total > 0;
 }
@@ -86,6 +100,7 @@ export function dayStatus(tracker, days, dateKey, today = todayKey()) {
   const entry = entryFor(days, dateKey, tracker.id);
   if (isHit(tracker, entry, dateKey)) return 'hit';
   if (tracker.type === 'counter' && entry && (entry.total || 0) > 0) return 'partial';
+  if (tracker.type === 'habit' && habitCount(entry) > 0) return 'partial';
   const first = firstDayKey(tracker, days);
   if (!first || dateKey < first) return 'empty';
   if (dateKey === today) return 'pending';
@@ -144,7 +159,7 @@ export function trackerStats(tracker, days, today = todayKey()) {
     s.loggedDays++;
     if (isHit(tracker, entry, key)) s.goalsHit++;
     if (tracker.type === 'habit') {
-      if (entry.done) s.doneDays++;
+      if (habitCount(entry) > 0) s.doneDays++;
       continue;
     }
     const total = entry.total || 0;

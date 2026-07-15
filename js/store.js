@@ -3,7 +3,7 @@
 // re-normalizes touched entries, saves, and notifies subscribers.
 
 import { todayKey, isValidKey, addDays, parseKey } from './dates.js';
-import { roundAmount } from './model.js';
+import { roundAmount, isHit } from './model.js';
 
 // Timestamp for a set logged against dateKey: real time for today, a
 // synthetic noon-ish time for retro days (keeps display + undo order sane).
@@ -64,6 +64,8 @@ function normalizeTracker(raw, i) {
     t.chips = Array.isArray(raw.chips)
       ? raw.chips.map((c) => num(c, NaN)).filter((c) => isFinite(c) && c > 0).slice(0, 8)
       : [];
+  } else {
+    t.perDay = Math.max(1, Math.round(num(raw.perDay, 1)));
   }
   return t;
 }
@@ -87,8 +89,10 @@ function normalizeEntry(tracker, raw) {
     entry.goalOverride = roundAmount(tracker, Number(raw.goalOverride));
   }
   if (tracker.type === 'habit') {
-    if (raw.done) entry.done = true;
-    return entry.done || entry.goalOverride != null ? entry : null;
+    // older data stored {done: true}; count supersedes it
+    const count = Math.max(0, Math.round(num(raw.count, raw.done ? 1 : 0)));
+    if (count > 0) entry.count = count;
+    return entry.count || entry.goalOverride != null ? entry : null;
   }
   entry.sets = Array.isArray(raw.sets)
     ? raw.sets
@@ -235,7 +239,7 @@ export function demoState(today = todayKey()) {
   };
   raw.trackers.t_meditate = {
     id: 't_meditate', name: 'Meditate', color: '#64B5A6', type: 'habit',
-    groupId: 'g_mind', order: 5, createdAt: start,
+    groupId: 'g_mind', order: 5, createdAt: start, perDay: 2,
   };
   raw.trackers.t_water = {
     id: 't_water', name: 'Water', color: '#FFB454', type: 'counter',
@@ -282,7 +286,7 @@ export function demoState(today = todayKey()) {
     }
     // Habits.
     if (rand() < 0.8) put(key, 't_stretch', { done: true });
-    if (rand() < 0.65) put(key, 't_meditate', { done: true });
+    if (rand() < 0.65) put(key, 't_meditate', { count: rand() < 0.6 ? 2 : 1 });
   }
   raw.days = days;
   raw.meta = { createdAt: start, lastBackup: addDays(today, -12) };
@@ -337,7 +341,7 @@ export function createStore({ storage, key = STORAGE_KEY, seed = seedState } = {
     if (entry) {
       const t = tracker(tid);
       const keep = entry.goalOverride != null ||
-        (t.type === 'habit' ? !!entry.done : (entry.sets || []).length > 0);
+        (t.type === 'habit' ? (entry.count || 0) > 0 : (entry.sets || []).length > 0);
       if (!keep) delete day[tid];
     }
     if (!Object.keys(day).length) delete state.days[dateKey];
@@ -535,15 +539,35 @@ export function createStore({ storage, key = STORAGE_KEY, seed = seedState } = {
       cleanupDay(dateKey, tid);
       commit();
     },
+    // Tap semantics: each tap adds one check; a tap on a completed day clears
+    // it (the natural generalization of toggling a once-a-day habit).
+    // Returns whether the day is now hit.
     toggleHabit(tid, dateKey, force) {
       const t = tracker(tid);
       if (!t || t.type !== 'habit') return;
       const entry = dayEntry(dateKey, tid, true);
-      entry.done = force != null ? !!force : !entry.done;
-      if (!entry.done) delete entry.done;
+      const per = Math.max(1, t.perDay || 1);
+      const cur = entry.count || 0;
+      let next;
+      if (force != null) next = force ? per : 0;
+      else next = cur >= per ? 0 : cur + 1;
+      if (next > 0) entry.count = next; else delete entry.count;
+      delete entry.done;
       cleanupDay(dateKey, tid);
       commit();
-      return !!(state.days[dateKey] && state.days[dateKey][tid] && state.days[dateKey][tid].done);
+      const now = state.days[dateKey] && state.days[dateKey][tid];
+      return isHit(t, now, dateKey);
+    },
+    // Set a habit day's check count directly (day editor stepper).
+    setHabitCount(tid, dateKey, count) {
+      const t = tracker(tid);
+      if (!t || t.type !== 'habit') return;
+      const entry = dayEntry(dateKey, tid, true);
+      const v = Math.max(0, Math.round(Number(count) || 0));
+      if (v > 0) entry.count = v; else delete entry.count;
+      delete entry.done;
+      cleanupDay(dateKey, tid);
+      commit();
     },
     setGoalOverride(tid, dateKey, value) {
       const t = tracker(tid);

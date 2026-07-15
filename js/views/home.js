@@ -4,6 +4,7 @@
 import { todayKey, longDate, daysBetween } from '../dates.js';
 import {
   entryFor, effectiveTarget, isHit, currentStreak, fmtAmount,
+  habitCount, habitTarget,
   pinnedTrackers, groupTrackers, sortedGroups, todaySummary,
 } from '../model.js';
 import { h, icon, accentStyle, haptic, ringSVG, reducedMotion, openSheet } from '../ui.js';
@@ -50,20 +51,32 @@ const goHistory = (t) => (e) => {
   location.hash = `t/${t.id}`;
 };
 
+// The face of a habit circle: a check once done (or for plain once-a-day
+// habits), a "2/5" progress count for multi habits in progress.
+function habitFace(t, entry, done) {
+  const per = habitTarget(t, entry);
+  if (done || per <= 1) return icon('check');
+  return h('span', { class: 'hc-count num' }, `${habitCount(entry)}/${per}`);
+}
+
 function checkButton(store, t, today, cls) {
   const entry = entryFor(store.state.days, today, t.id);
-  const done = !!(entry && entry.done);
+  const done = isHit(t, entry, today);
+  const count = habitCount(entry);
+  const per = habitTarget(t, entry);
   const justToggled = pendingFx.delete(t.id);
   const btn = h('button', {
-    class: `${cls} ${done && !justToggled ? 'done' : ''}`,
-    'aria-label': `${t.name}: mark ${done ? 'not done' : 'done'}`,
+    class: `${cls} ${done && !justToggled ? 'done' : ''} ${!done && count > 0 ? 'part' : ''}`,
+    'aria-label': per > 1
+      ? `${t.name}: ${count} of ${per} today — tap to add one`
+      : `${t.name}: mark ${done ? 'not done' : 'done'}`,
     onclick: (e) => {
       e.stopPropagation();
       const nowDone = store.toggleHabit(t.id, today);
       queueFx(t.id);
       haptic(nowDone ? [12, 50, 16] : 8);
     },
-  }, icon('check'));
+  }, habitFace(t, entry, done));
   if (justToggled) {
     // apply final state a frame late so the check draws + pops
     requestAnimationFrame(() => {
@@ -137,7 +150,10 @@ function trackerRow(store, t, today) {
       h('div', { class: 'trow-name' }, t.name,
         t.priority ? h('span', { class: 'trow-star', 'aria-label': 'pinned' }, icon('starFill')) : null),
       h('div', { class: 'trow-sub num' },
-        streak > 0 ? `\u{1F525} ${streak} day${streak === 1 ? '' : 's'}` : (t.type === 'habit' ? 'tap circle to check off' : (t.time ? 'minutes' : (t.unit || 'counter'))),
+        streak > 0 ? `\u{1F525} ${streak} day${streak === 1 ? '' : 's'}`
+          : (t.type === 'habit'
+              ? (habitTarget(t, entry) > 1 ? `${habitCount(entry)} of ${habitTarget(t, entry)} today` : 'tap circle to check off')
+              : (t.time ? 'minutes' : (t.unit || 'counter'))),
       )),
     t.type === 'counter'
       ? h('div', { class: 'trow-val num' }, fmtAmount(t, total), target > 0 ? h('small', {}, ` / ${fmtAmount(t, target)}`) : null)

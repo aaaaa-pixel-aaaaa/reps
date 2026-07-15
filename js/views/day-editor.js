@@ -5,6 +5,7 @@
 import { todayKey, shortDate, timeOf } from '../dates.js';
 import {
   entryFor, effectiveTarget, computedTarget, isHit, fmtAmount, roundAmount,
+  habitCount, habitTarget,
 } from '../model.js';
 import { stampFor } from '../store.js';
 import { h, icon, haptic, openSheet, toast, reducedMotion } from '../ui.js';
@@ -30,7 +31,7 @@ export function openDayEditor(store, trackerId, dateKey) {
         const status = h('div', { class: 'log-meta num', style: 'margin-bottom:6px' });
         const toggle = h('button', {
           class: 'bigtoggle',
-          'aria-label': 'toggle done',
+          'aria-label': 'check off',
           onclick: () => {
             const nowDone = store.toggleHabit(trackerId, dateKey);
             haptic(nowDone ? [12, 50, 16] : 8);
@@ -41,14 +42,32 @@ export function openDayEditor(store, trackerId, dateKey) {
             }
           },
         }, icon('check'));
-        body.append(toggle, status);
+        const removeOne = h('button', {
+          class: 'linklike',
+          style: 'display:none',
+          onclick: () => {
+            store.setHabitCount(trackerId, dateKey, habitCount(entry()) - 1);
+            haptic(8);
+          },
+        }, '− remove one');
+        body.append(toggle, status, removeOne);
 
         const update = () => {
-          const done = !!(entry() && entry().done);
+          const e = entry();
+          const done = isHit(t, e, dateKey);
+          const count = habitCount(e);
+          const per = habitTarget(t, e);
           toggle.classList.toggle('done', done);
+          toggle.classList.toggle('part', !done && count > 0);
+          toggle.replaceChildren(done || per <= 1
+            ? icon('check')
+            : h('span', { class: 'hc-count num' }, `${count}/${per}`));
           status.textContent = done
             ? (isToday ? 'Done today' : `Done on ${shortDate(dateKey)}`)
-            : (isToday ? 'Not done yet' : 'Not done');
+            : per > 1
+              ? `${count} of ${per}${isToday ? ' today' : ''} — tap to add one`
+              : (isToday ? 'Not done yet' : 'Not done');
+          removeOne.style.display = per > 1 && count > 0 ? '' : 'none';
         };
         update();
         unsub = store.subscribe(update);

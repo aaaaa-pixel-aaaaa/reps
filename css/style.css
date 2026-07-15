@@ -219,6 +219,16 @@ input, select, textarea { font: inherit; color: inherit; }
 }
 .habit-check.pop { animation: pop 0.45s var(--spring); }
 
+/* multi habits: circle shows "2/5" progress until the day completes */
+.hc-count { font-weight: 800; color: var(--c); letter-spacing: -0.02em; }
+.habit-check .hc-count { font-size: 21px; }
+.mini-check .hc-count { font-size: 11px; }
+.bigtoggle .hc-count { font-size: 30px; }
+.habit-check.part, .mini-check.part, .bigtoggle.part {
+  border-color: var(--c-70);
+  background: var(--c-25);
+}
+
 /* streak pill */
 .streak {
   display: inline-flex;

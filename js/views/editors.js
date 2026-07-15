@@ -126,7 +126,18 @@ export function openTrackerEditor(store, trackerId = null, presets = {}) {
 
       function renderCounterFields() {
         counterBox.replaceChildren();
-        if (f.type !== 'counter') return;
+        if (f.type !== 'counter') {
+          const perInput = h('input', {
+            class: 'input num', type: 'number', min: '1', step: '1', inputmode: 'numeric',
+          });
+          perInput.value = f.perDay || 1;
+          perInput.addEventListener('input', () => {
+            f.perDay = Math.max(1, Math.round(parseFloat(perInput.value) || 1));
+          });
+          counterBox.append(field('times per day', perInput,
+            'each tap on the circle counts once — the day completes at this many'));
+          return;
+        }
         const unitInput = h('input', { class: 'input', type: 'text', maxlength: '16', placeholder: 'reps, km, pages…' });
         unitInput.value = f.unit || '';
         unitInput.addEventListener('input', () => { f.unit = unitInput.value; });

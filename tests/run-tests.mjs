@@ -6,6 +6,7 @@ import {
 import {
   computedTarget, effectiveTarget, isHit, dayStatus, currentStreak,
   longestStreak, trackerStats, todaySummary, fmtAmount, fmtMinutes,
+  habitCount, habitTarget,
 } from '../js/model.js';
 import { createStore, normalizeState, validateImport, seedState, demoState } from '../js/store.js';
 import { pinnedTrackers, groupTrackers, reorderContext } from '../js/model.js';
@@ -272,6 +273,58 @@ eq(fmtMinutes(-5), '-5m', 'negative correction');
   eq(norm.trackers.x.dec, false, 'time counters force integer minutes');
   eq(norm.trackers.x.unit, '', 'time counters have no free-text unit');
   eq(norm.trackers.x.time, true, 'time flag survives normalize');
+}
+
+// ---------- multi-count habits ----------
+{
+  const h3 = { id: 'h3', type: 'habit', perDay: 3, createdAt: '2026-07-01' };
+  eq(habitCount({ done: true }), 1, 'legacy done reads as one check');
+  eq(habitCount({ count: 2 }), 2, 'count wins');
+  eq(habitCount(undefined), 0, 'no entry, no checks');
+  eq(habitTarget(h3, undefined), 3, 'target from perDay');
+  eq(habitTarget(h3, { goalOverride: 5 }), 5, 'per-day override wins');
+  eq(habitTarget({ id: 'h1', type: 'habit' }, undefined), 1, 'missing perDay means 1');
+
+  eq(isHit(h3, { count: 3 }, '2026-07-10'), true, 'hit at perDay');
+  eq(isHit(h3, { count: 2 }, '2026-07-10'), false, 'under perDay not hit');
+  eq(isHit(h3, { goalOverride: 0 }, '2026-07-10'), true, 'habit rest day always hit');
+  const days = { '2026-07-10': { h3: { count: 2 } } };
+  eq(dayStatus(h3, days, '2026-07-10', '2026-07-14'), 'partial', 'in-progress habit is partial');
+
+  // normalize: perDay clamps, done converts to count
+  const norm = normalizeState({
+    trackers: { h: { id: 'h', name: 'Water', type: 'habit', perDay: 4.7 } },
+    days: { '2026-07-10': { h: { done: true } }, '2026-07-11': { h: { count: 3 } } },
+  });
+  eq(norm.trackers.h.perDay, 5, 'perDay rounds');
+  eq(norm.days['2026-07-10'].h.count, 1, 'legacy done normalizes to count 1');
+  eq(norm.days['2026-07-11'].h.count, 3, 'count preserved');
+
+  // store: taps increment, completing tap wraps to 0, stepper sets directly
+  const store = createStore({ storage: memStorage(), seed: () => seedState('2026-07-14') });
+  const id = store.addTracker({ name: 'Hydrate', type: 'habit', perDay: 3 });
+  eq(store.toggleHabit(id, '2026-07-14'), false, 'first tap not done yet');
+  eq(store.toggleHabit(id, '2026-07-14'), false, 'second tap not done yet');
+  eq(store.toggleHabit(id, '2026-07-14'), true, 'third tap completes');
+  eq(store.state.days['2026-07-14'][id].count, 3, 'count stored');
+  eq(store.toggleHabit(id, '2026-07-14'), false, 'tap on complete day clears it');
+  eq(store.state.days['2026-07-14'] && store.state.days['2026-07-14'][id], undefined,
+    'cleared habit entry cleaned up');
+  store.setHabitCount(id, '2026-07-14', 2);
+  eq(store.state.days['2026-07-14'][id].count, 2, 'setHabitCount stores');
+  store.setHabitCount(id, '2026-07-14', 0);
+  eq(store.state.days['2026-07-14'] && store.state.days['2026-07-14'][id], undefined,
+    'setHabitCount 0 cleans up');
+  eq(store.toggleHabit(id, '2026-07-14', true), true, 'force true jumps to complete');
+  eq(store.state.days['2026-07-14'][id].count, 3, 'forced complete stores perDay');
+
+  // streaks recompute off counts
+  const hdays = {
+    '2026-07-12': { h3: { count: 3 } },
+    '2026-07-13': { h3: { count: 3 } },
+    '2026-07-14': { h3: { count: 1 } },
+  };
+  eq(currentStreak(h3, hdays, '2026-07-14'), 2, 'unfinished today does not break streak');
 }
 
 // ---------- pinned strip vs group ordering ----------

@@ -29,8 +29,10 @@ export function openLogSheet(store, trackerId, dateKey = todayKey()) {
       const goalEl = h('span', { class: 'log-goal num' }, '');
       const metaEl = h('div', { class: 'log-meta num' }, '');
 
+      // time counters: 9° per minute = 40m per revolution, so a long session
+      // doesn't take endless spinning
       const wheel = createWheel({
-        stepDeg: t.dec ? 36 : 18,
+        stepDeg: t.dec ? 36 : (t.time ? 9 : 18),
         stepVal: t.dec ? 0.1 : 1,
         round: (x) => roundAmount(t, x),
         onChange: (p) => {
