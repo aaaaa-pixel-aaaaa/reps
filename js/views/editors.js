@@ -148,7 +148,9 @@ export function openTrackerEditor(store, trackerId = null, presets = {}) {
         updateTargetHint();
 
         const chipsInput = h('input', {
-          class: 'input num', type: 'text', inputmode: f.dec ? 'decimal' : 'numeric',
+          // full keyboard on purpose: the numeric inputmode pad has no comma
+          // or space key, and this list needs separators
+          class: 'input num', type: 'text', autocomplete: 'off',
           placeholder: f.time ? 'e.g. 5, 10, 15, 30' : 'e.g. 10, 15, 20',
         });
         chipsInput.value = (f.chips || []).join(', ');
