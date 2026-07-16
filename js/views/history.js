@@ -7,7 +7,7 @@ import {
   shortDate, timeOf, WEEKDAYS_MIN,
 } from '../dates.js';
 import {
-  entryFor, effectiveTarget, isHit, dayStatus, trackerStats, firstDayKey,
+  entryFor, effectiveTarget, isHit, dayStatus, trackerStats,
   fmtAmount, habitCount, habitTarget, hitIntensity,
 } from '../model.js';
 import { h, icon, accentStyle, haptic, ringSVG } from '../ui.js';
@@ -26,11 +26,8 @@ export function renderHistory(root, store, trackerId) {
 
   const days = store.state.days;
   const stats = trackerStats(t, days, today);
-  const first = firstDayKey(t, days) || today;
-  const firstMonth = monthOf(first);
   const nowMonth = monthOf(today);
   let cur = monthMemo.get(trackerId) || nowMonth;
-  if (cmpMonth(cur, firstMonth) < 0) cur = firstMonth;
   if (cmpMonth(cur, nowMonth) > 0) cur = nowMonth;
 
   root.append(h('div', { style: accentStyle(t.color) },
@@ -126,13 +123,14 @@ function statsGrid(t, stats) {
 
 function calendar(store, t, cur, today) {
   const days = store.state.days;
-  const first = firstDayKey(t, days) || today;
-  const firstMonth = monthOf(first);
   const nowMonth = monthOf(today);
 
+  // No floor on how far back you can navigate — months before the tracker
+  // existed just render as empty, and every cell (bar the future) still
+  // opens the retro day editor, so backfilling old data works either way.
   const nav = (delta) => {
     const next = addMonths(cur, delta);
-    if (cmpMonth(next, firstMonth) < 0 || cmpMonth(next, nowMonth) > 0) return;
+    if (cmpMonth(next, nowMonth) > 0) return;
     monthMemo.set(t.id, next);
     haptic(6);
     rebuild(next);
@@ -148,7 +146,7 @@ function calendar(store, t, cur, today) {
         h('div', { class: 'cal-nav' },
           h('button', {
             class: 'icon-btn', 'aria-label': 'previous month',
-            disabled: cmpMonth(m, firstMonth) <= 0, onclick: () => nav(-1),
+            onclick: () => nav(-1),
           }, icon('chevL')),
           h('button', {
             class: 'icon-btn', 'aria-label': 'next month',
