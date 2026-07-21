@@ -203,20 +203,42 @@ export function trackerStats(tracker, days, today = todayKey()) {
 
 // Roll a tracker's days up over an inclusive date-key range, clamped so a
 // period that's still in progress (this week/month) only counts elapsed
-// days, not ones that haven't happened yet.
+// days, not ones that haven't happened yet. targetSum is the exception: it
+// sums the *whole* nominal period's daily goals (including days still to
+// come), since it's the denominator weekly/monthly views compare the
+// period's total against — a week's "expected" total assumes the week
+// eventually completes, not just the part of it that's happened so far.
 export function rangeStats(tracker, days, fromKey, toKey, today = todayKey()) {
   const end = toKey > today ? today : toKey;
-  const s = { total: 0, checks: 0, hitDays: 0, elapsedDays: 0 };
-  if (fromKey > end) return s;
-  for (let k = fromKey; k <= end; k = addDays(k, 1)) {
-    s.elapsedDays++;
-    const entry = entryFor(days, k, tracker.id);
-    if (tracker.type === 'habit') s.checks += habitCount(entry);
-    else s.total += entry ? entry.total || 0 : 0;
-    if (isHit(tracker, entry, k)) s.hitDays++;
+  const s = { total: 0, checks: 0, hitDays: 0, elapsedDays: 0, targetSum: 0 };
+  if (fromKey <= end) {
+    for (let k = fromKey; k <= end; k = addDays(k, 1)) {
+      s.elapsedDays++;
+      const entry = entryFor(days, k, tracker.id);
+      if (tracker.type === 'habit') s.checks += habitCount(entry);
+      else s.total += entry ? entry.total || 0 : 0;
+      if (isHit(tracker, entry, k)) s.hitDays++;
+    }
+    s.total = roundAmount(tracker, s.total);
   }
-  s.total = roundAmount(tracker, s.total);
+  for (let k = fromKey; k <= toKey; k = addDays(k, 1)) {
+    const entry = entryFor(days, k, tracker.id);
+    s.targetSum += tracker.type === 'habit' ? habitTarget(tracker, entry) : effectiveTarget(tracker, k, entry);
+  }
   return s;
+}
+
+// Continuous 0..1 "how loaded" a week/month should look, ramping between
+// two multiples of the period's target sum. Unlike hitIntensity there's no
+// hard hit/miss gate here — a week has no single "done" moment, so colour
+// just tracks progress along the ramp: nothing below lowerMult, maxed out
+// at/above upperMult, linear in between.
+export function periodIntensity(achieved, targetSum, lowerMult, upperMult) {
+  if (targetSum <= 0) return 0;
+  const ratio = achieved / targetSum;
+  if (ratio <= lowerMult) return 0;
+  if (ratio >= upperMult) return 1;
+  return (ratio - lowerMult) / (upperMult - lowerMult);
 }
 
 // ---- Sorting helpers shared by views and reorder mutations ----

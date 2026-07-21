@@ -773,28 +773,54 @@ input[type="date"].input { line-height: 48px; }
 
 .sect-title { font-size: 15px; font-weight: 800; margin: 18px 0 10px; color: var(--text); }
 
-.plist { display: flex; flex-direction: column; gap: 8px; }
-.prow {
+/* ---------- weekly calendar (month-paged week bars) ---------- */
+.wk-list { display: flex; flex-direction: column; gap: 7px; }
+.wk-bar {
   width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  background: var(--raise);
-  border: 1px solid var(--line);
-  border-left: 4px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 12px 14px;
+  border-radius: 10px;
+  padding: 13px 14px;
   text-align: left;
+  background: var(--raise2);
   transition: transform 0.15s var(--spring);
 }
-.prow:active { transform: scale(0.978); }
-.prow.full { border-left-color: var(--c); }
-.prow.part { border-left-color: var(--c-25); }
-.prow.none { border-left-color: rgba(228, 87, 61, 0.35); }
-.prow-label { font-size: 14px; font-weight: 700; }
-.prow-sub { font-size: 12px; color: var(--dim); margin-top: 2px; }
-.prow-val { font-size: 16px; font-weight: 800; }
+.wk-bar:not(:disabled):active { transform: scale(0.978); }
+.wk-bar.future { color: var(--faint); opacity: 0.5; }
+.wk-label { font-size: 13.5px; font-weight: 700; }
+.wk-val { font-size: 14.5px; font-weight: 800; }
+
+/* ---------- monthly calendar (year-paged month cells) ---------- */
+.mo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.mo-cell {
+  aspect-ratio: 1.3;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: var(--raise2);
+  transition: transform 0.15s var(--spring);
+}
+.mo-cell:not(:disabled):active { transform: scale(0.94); }
+.mo-cell.future { color: var(--faint); opacity: 0.5; }
+.mo-name { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; }
+.mo-val { font-size: 15px; font-weight: 800; }
+
+/* ---------- shared gradient legend ---------- */
+.grad-legend { margin-top: 14px; }
+.grad-bar { height: 8px; border-radius: 999px; }
+.grad-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--faint);
+  font-weight: 600;
+}
 
 .daylog { display: flex; flex-direction: column; gap: 8px; }
 .dl {

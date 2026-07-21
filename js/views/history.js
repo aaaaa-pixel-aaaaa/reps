@@ -5,22 +5,22 @@
 import {
   todayKey, monthOf, addMonths, cmpMonth, monthGrid, monthLabel,
   shortDate, timeOf, WEEKDAYS_MIN, mondayOf, addWeeks, weekLabel,
-  firstOfMonth, lastOfMonth, addDays,
+  firstOfMonth, lastOfMonth, MONTHS_3, addDays,
 } from '../dates.js';
 import {
-  entryFor, effectiveTarget, isHit, dayStatus, trackerStats, firstDayKey,
-  fmtAmount, habitCount, habitTarget, hitIntensity, rangeStats,
+  entryFor, effectiveTarget, isHit, dayStatus, trackerStats,
+  fmtAmount, habitCount, habitTarget, hitIntensity, rangeStats, periodIntensity,
 } from '../model.js';
-import { h, icon, accentStyle, haptic, ringSVG } from '../ui.js';
+import { h, icon, accentStyle, haptic, ringSVG, rgba } from '../ui.js';
 import { openDayEditor } from './day-editor.js';
 import { openLogSheet } from './log-sheet.js';
 import { openTrackerOptions, segmented } from './editors.js';
 
 // UI state that must survive re-renders (any store change re-renders the view)
-const monthMemo = new Map();   // trackerId -> {y, m}
-const logLimit = new Map();    // trackerId -> rows shown
-const viewMemo = new Map();    // trackerId -> 'day' | 'week' | 'month'
-const periodLimit = new Map(); // `${trackerId}:${kind}` -> rows shown
+const monthMemo = new Map(); // trackerId -> {y, m}, shared by the day and week calendars
+const logLimit = new Map();  // trackerId -> rows shown
+const viewMemo = new Map();  // trackerId -> 'day' | 'week' | 'month'
+const yearMemo = new Map();  // trackerId -> year shown in the monthly calendar
 
 export function renderHistory(root, store, trackerId) {
   const t = store.state.trackers[trackerId];
@@ -32,16 +32,22 @@ export function renderHistory(root, store, trackerId) {
   const nowMonth = monthOf(today);
   let cur = monthMemo.get(trackerId) || nowMonth;
   if (cmpMonth(cur, nowMonth) > 0) cur = nowMonth;
+  const nowYear = Number(today.slice(0, 4));
+  let year = yearMemo.get(trackerId) || nowYear;
+  if (year > nowYear) year = nowYear;
   const mode = viewMemo.get(trackerId) || 'day';
+
+  let body;
+  if (mode === 'day') body = h('div', {}, calendar(store, t, cur, today), dayLog(store, t, today));
+  else if (mode === 'week') body = weekCalendar(store, t, cur, today);
+  else body = monthCalendar(store, t, year, today);
 
   root.append(h('div', { style: accentStyle(t.color) },
     header(store, t),
     hero(store, t, today, stats),
     statsGrid(t, stats),
     viewToggle(store, t, mode),
-    mode === 'day'
-      ? h('div', {}, calendar(store, t, cur, today), dayLog(store, t, today))
-      : periodList(store, t, mode, today),
+    body,
   ));
 }
 
@@ -63,70 +69,150 @@ function viewToggle(store, t, mode) {
     ], mode, (v) => { viewMemo.set(t.id, v); rerender(store, t.id); }));
 }
 
-// Weekly/monthly roll-up: most recent period first, each row opens onto the
-// daily calendar for that period so the two views stay one tap apart.
-function periodList(store, t, kind, today) {
+// A week's/month's fill colour: a continuous tint of the tracker's own
+// accent, from a faint hint at 0 up to a near-solid fill at 1 — deliberately
+// not the discrete hit/partial/miss look the daily calendar uses, since a
+// week or month has no single "done" moment to gate on.
+function loadColor(t, boost) {
+  return rgba(t.color, 0.08 + boost * 0.82);
+}
+
+// A gradient strip explaining the gradient: bare colour at `lowerMult`x the
+// period's total goal, full colour at `upperMult`x.
+function gradientLegend(t, lowerMult, upperMult) {
+  return h('div', { class: 'grad-legend' },
+    h('div', { class: 'grad-bar', style: `background:linear-gradient(to right, ${rgba(t.color, 0.08)}, ${t.color})` }),
+    h('div', { class: 'grad-labels' },
+      h('span', {}, `${lowerMult}× goal`),
+      h('span', {}, `${upperMult}× goal`)));
+}
+
+// Weekly view: the same month-paged calendar shell as the daily view, but
+// each row is one Monday-Sunday week rendered as a single wide bar instead
+// of 7 day cells. A week can straddle two months (the grid's first/last
+// row often does) — its colour and total always reflect the real 7-day
+// week, even when only part of it falls inside the month being paged, so
+// that week may also appear as the edge row of the neighbouring month.
+function weekCalendar(store, t, cur, today) {
   const days = store.state.days;
-  const first = firstDayKey(t, days) || today;
-  const memoKey = `${t.id}:${kind}`;
-  const limit = periodLimit.get(memoKey) || 12;
+  const nowMonth = monthOf(today);
 
-  const starts = [];
-  if (kind === 'week') {
-    const floor = mondayOf(first);
-    for (let m = mondayOf(today); m >= floor; m = addWeeks(m, -1)) starts.push(m);
-  } else {
-    const floor = monthOf(first);
-    for (let m = monthOf(today); cmpMonth(m, floor) >= 0; m = addMonths(m, -1)) starts.push(m);
-  }
+  const nav = (delta) => {
+    const next = addMonths(cur, delta);
+    if (cmpMonth(next, nowMonth) > 0) return;
+    monthMemo.set(t.id, next);
+    haptic(6);
+    rebuild(next);
+  };
 
-  if (!starts.length) {
-    return h('div', {},
-      h('div', { class: 'sect-title' }, kind === 'week' ? 'Weekly totals' : 'Monthly totals'),
-      h('div', { class: 'empty-note', style: 'padding:20px' }, 'Nothing logged yet.'));
-  }
+  const box = h('div', { class: 'cal' });
 
-  const shown = starts.slice(0, limit).map((start) => {
-    const isWeek = kind === 'week';
-    const label = isWeek ? weekLabel(start, today) : monthLabel(start);
-    const fromKey = isWeek ? start : firstOfMonth(start);
-    const toKey = isWeek ? addDays(start, 6) : lastOfMonth(start);
-    const stat = rangeStats(t, days, fromKey, toKey, today);
-    const ratio = stat.elapsedDays > 0 ? stat.hitDays / stat.elapsedDays : 0;
-    const cls = stat.elapsedDays === 0 ? '' : ratio >= 1 ? 'full' : ratio > 0 ? 'part' : 'none';
+  function rebuild(m) {
+    cur = m;
+    const mondays = [...new Set(monthGrid(m.y, m.m).map((week) => mondayOf(week.find(Boolean))))];
 
-    const mainVal = t.type === 'counter'
-      ? `${fmtAmount(t, stat.total)}${t.unit ? ' ' + t.unit : ''}`
-      : `${stat.hitDays}/${stat.elapsedDays}`;
-    const sub = t.type === 'counter'
-      ? `${stat.hitDays} of ${stat.elapsedDays} day${stat.elapsedDays === 1 ? '' : 's'} hit goal`
-      : ((t.perDay || 1) > 1 ? `${stat.checks} check${stat.checks === 1 ? '' : 's'} total` : `${stat.hitDays} day${stat.hitDays === 1 ? '' : 's'} done`);
+    const bars = mondays.map((monday) => {
+      const fromKey = monday;
+      const toKey = addDays(monday, 6);
+      const stat = rangeStats(t, days, fromKey, toKey, today);
+      const achieved = t.type === 'habit' ? stat.checks : stat.total;
+      const boost = periodIntensity(achieved, stat.targetSum, 0.75, 2);
+      const future = fromKey > today;
+      const mainVal = t.type === 'counter'
+        ? `${fmtAmount(t, stat.total)}${t.unit ? ' ' + t.unit : ''}`
+        : `${stat.hitDays}/${stat.elapsedDays}`;
 
-    return h('button', {
-      class: `prow ${cls}`,
-      onclick: () => {
-        viewMemo.set(t.id, 'day');
-        monthMemo.set(t.id, isWeek ? monthOf(start) : start);
-        haptic(6);
-        rerender(store, t.id);
+      return h('button', {
+        class: `wk-bar${future ? ' future' : ''}`,
+        style: future ? undefined : `background:${loadColor(t, boost)}`,
+        disabled: future,
+        onclick: () => {
+          viewMemo.set(t.id, 'day');
+          monthMemo.set(t.id, monthOf(monday));
+          haptic(6);
+          rerender(store, t.id);
+        },
       },
-    },
-      h('div', {},
-        h('div', { class: 'prow-label' }, label),
-        h('div', { class: 'prow-sub' }, sub)),
-      h('div', { class: 'prow-val num' }, mainVal));
-  });
+        h('span', { class: 'wk-label' }, weekLabel(monday, today)),
+        h('span', { class: 'wk-val num' }, mainVal));
+    });
 
-  const more = starts.length > limit
-    ? h('button', {
-        class: 'btn btn-ghost show-more',
-        onclick: () => { periodLimit.set(memoKey, limit + 12); rerender(store, t.id); },
-      }, `Show ${Math.min(12, starts.length - limit)} more`)
-    : null;
+    box.replaceChildren(
+      h('div', { class: 'cal-head' },
+        h('div', { class: 'cal-month' }, monthLabel(m)),
+        h('div', { class: 'cal-nav' },
+          h('button', { class: 'icon-btn', 'aria-label': 'previous month', onclick: () => nav(-1) }, icon('chevL')),
+          h('button', {
+            class: 'icon-btn', 'aria-label': 'next month',
+            disabled: cmpMonth(m, nowMonth) >= 0, onclick: () => nav(1),
+          }, icon('chevR')))),
+      h('div', { class: 'wk-list' }, bars),
+      gradientLegend(t, 0.75, 2),
+    );
+  }
+  rebuild(cur);
+  return box;
+}
 
-  return h('div', {},
-    h('div', { class: 'sect-title' }, kind === 'week' ? 'Weekly totals' : 'Monthly totals'),
-    h('div', { class: 'plist' }, shown, more));
+// Monthly view: a year-paged grid of 12 month cells, the same idea as the
+// daily calendar's day grid but zoomed out one more level.
+function monthCalendar(store, t, year, today) {
+  const days = store.state.days;
+  const nowYear = Number(today.slice(0, 4));
+
+  const nav = (delta) => {
+    const next = year + delta;
+    if (next > nowYear) return;
+    yearMemo.set(t.id, next);
+    haptic(6);
+    rebuild(next);
+  };
+
+  const box = h('div', { class: 'cal' });
+
+  function rebuild(y) {
+    year = y;
+    const cells = [];
+    for (let m = 0; m < 12; m++) {
+      const mo = { y, m };
+      const fromKey = firstOfMonth(mo);
+      const toKey = lastOfMonth(mo);
+      const stat = rangeStats(t, days, fromKey, toKey, today);
+      const achieved = t.type === 'habit' ? stat.checks : stat.total;
+      const boost = periodIntensity(achieved, stat.targetSum, 0.5, 1.25);
+      const future = fromKey > today;
+      const mainVal = t.type === 'counter' ? fmtAmount(t, stat.total) : `${stat.hitDays}/${stat.elapsedDays}`;
+
+      cells.push(h('button', {
+        class: `mo-cell${future ? ' future' : ''}`,
+        style: future ? undefined : `background:${loadColor(t, boost)}`,
+        disabled: future,
+        onclick: () => {
+          viewMemo.set(t.id, 'day');
+          monthMemo.set(t.id, mo);
+          haptic(6);
+          rerender(store, t.id);
+        },
+      },
+        h('span', { class: 'mo-name' }, MONTHS_3[m]),
+        h('span', { class: 'mo-val num' }, mainVal)));
+    }
+
+    box.replaceChildren(
+      h('div', { class: 'cal-head' },
+        h('div', { class: 'cal-month' }, String(y)),
+        h('div', { class: 'cal-nav' },
+          h('button', { class: 'icon-btn', 'aria-label': 'previous year', onclick: () => nav(-1) }, icon('chevL')),
+          h('button', {
+            class: 'icon-btn', 'aria-label': 'next year',
+            disabled: y >= nowYear, onclick: () => nav(1),
+          }, icon('chevR')))),
+      h('div', { class: 'mo-grid' }, cells),
+      gradientLegend(t, 0.5, 1.25),
+    );
+  }
+  rebuild(year);
+  return box;
 }
 
 function header(store, t) {

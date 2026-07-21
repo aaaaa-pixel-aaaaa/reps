@@ -7,7 +7,7 @@ import {
 import {
   computedTarget, effectiveTarget, isHit, dayStatus, currentStreak,
   longestStreak, trackerStats, todaySummary, fmtAmount, fmtMinutes,
-  habitCount, habitTarget, hitIntensity, rangeStats,
+  habitCount, habitTarget, hitIntensity, rangeStats, periodIntensity,
 } from '../js/model.js';
 import { createStore, normalizeState, validateImport, seedState, demoState } from '../js/store.js';
 import { pinnedTrackers, groupTrackers, reorderContext } from '../js/model.js';
@@ -386,6 +386,16 @@ eq(fmtMinutes(-5), '-5m', 'negative correction');
 
   const past = rangeStats(c, cdays, '2026-07-01', '2026-07-31', '2026-07-16');
   eq(past.elapsedDays, 16, 'a month in progress stops counting at "today", not month end');
+
+  eq(week.targetSum, 60, 'targetSum covers the whole nominal week (6 normal days x10, rest day contributes 0), including days not yet elapsed');
+  eq(hweek.targetSum, 14, 'habit targetSum: 7 days x perDay 2');
+
+  eq(periodIntensity(0, 60, 0.75, 2), 0, 'nothing logged: no colour');
+  eq(periodIntensity(45, 60, 0.75, 2), 0, 'exactly at the lower threshold (0.75x): still no colour');
+  eq(periodIntensity(120, 60, 0.75, 2), 1, 'at the upper threshold (2x): fully saturated');
+  eq(periodIntensity(240, 60, 0.75, 2), 1, 'past the upper threshold: stays capped');
+  eq(periodIntensity(82.5, 60, 0.75, 2), 0.5, 'halfway between 0.75x and 2x: half intensity');
+  eq(periodIntensity(10, 0, 0.75, 2), 0, 'no target at all: no colour (avoids divide by zero)');
 }
 
 // ---------- live timer ----------
