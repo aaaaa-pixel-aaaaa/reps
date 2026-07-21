@@ -50,24 +50,49 @@ export function openDayEditor(store, trackerId, dateKey) {
             haptic(8);
           },
         }, '− remove one');
-        body.append(toggle, status, removeOne);
+
+        const goalInfo = h('div', { class: 'grow' });
+        const goalBtns = h('div', { style: 'display:flex;gap:6px' });
+        const goalRow = h('div', { class: 'goalrow' }, goalInfo, goalBtns);
+
+        body.append(toggle, status, removeOne, goalRow);
 
         const update = () => {
           const e = entry();
           const done = isHit(t, e, dateKey);
           const count = habitCount(e);
           const per = habitTarget(t, e);
+          const rest = !!(e && e.goalOverride === 0);
           toggle.classList.toggle('done', done);
           toggle.classList.toggle('part', !done && count > 0);
           toggle.replaceChildren(done || per <= 1
             ? icon('check')
             : h('span', { class: 'hc-count num' }, `${count}/${per}`));
-          status.textContent = done
-            ? (isToday ? 'Done today' : `Done on ${shortDate(dateKey)}`)
-            : per > 1
-              ? `${count} of ${per}${isToday ? ' today' : ''} — tap to add one`
-              : (isToday ? 'Not done yet' : 'Not done');
+          status.textContent = rest
+            ? (isToday ? 'Rest day — streak safe' : 'Rest day')
+            : done
+              ? (isToday ? 'Done today' : `Done on ${shortDate(dateKey)}`)
+              : per > 1
+                ? `${count} of ${per}${isToday ? ' today' : ''} — tap to add one`
+                : (isToday ? 'Not done yet' : 'Not done');
           removeOne.style.display = per > 1 && count > 0 ? '' : 'none';
+
+          goalInfo.replaceChildren(
+            h('div', { class: 'g-lbl' }, 'This day'),
+            h('div', { class: 'g-val num', style: rest ? 'color:var(--c)' : '' }, rest ? 'Rest day' : 'Normal'),
+            h('div', { class: 'g-note' }, rest ? 'counts as done, streak stays safe' : ''),
+          );
+          goalBtns.replaceChildren(
+            rest
+              ? h('button', {
+                  class: 'chip small',
+                  onclick: () => { store.setGoalOverride(trackerId, dateKey, null); haptic(8); },
+                }, 'Reset')
+              : h('button', {
+                  class: 'chip small',
+                  onclick: () => { store.setGoalOverride(trackerId, dateKey, 0); haptic(8); toast('Rest day — streak safe'); },
+                }, 'Rest day'),
+          );
         };
         update();
         unsub = store.subscribe(update);
