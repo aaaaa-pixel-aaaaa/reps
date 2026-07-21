@@ -201,6 +201,24 @@ export function trackerStats(tracker, days, today = todayKey()) {
   return s;
 }
 
+// Roll a tracker's days up over an inclusive date-key range, clamped so a
+// period that's still in progress (this week/month) only counts elapsed
+// days, not ones that haven't happened yet.
+export function rangeStats(tracker, days, fromKey, toKey, today = todayKey()) {
+  const end = toKey > today ? today : toKey;
+  const s = { total: 0, checks: 0, hitDays: 0, elapsedDays: 0 };
+  if (fromKey > end) return s;
+  for (let k = fromKey; k <= end; k = addDays(k, 1)) {
+    s.elapsedDays++;
+    const entry = entryFor(days, k, tracker.id);
+    if (tracker.type === 'habit') s.checks += habitCount(entry);
+    else s.total += entry ? entry.total || 0 : 0;
+    if (isHit(tracker, entry, k)) s.hitDays++;
+  }
+  s.total = roundAmount(tracker, s.total);
+  return s;
+}
+
 // ---- Sorting helpers shared by views and reorder mutations ----
 
 const byOrder = (a, b) => (a.order - b.order) || String(a.id).localeCompare(String(b.id));

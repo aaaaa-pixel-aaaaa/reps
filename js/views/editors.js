@@ -15,7 +15,7 @@ function field(label, control, hint) {
     hint ? h('div', { class: 'hint' }, hint) : null);
 }
 
-function segmented(options, value, onChange) {
+export function segmented(options, value, onChange) {
   const seg = h('div', { class: 'seg' });
   const paint = (v) => {
     seg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === v));

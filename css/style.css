@@ -767,7 +767,34 @@ input[type="date"].input { line-height: 48px; }
 }
 .cal-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; margin-right: 5px; vertical-align: -1px; }
 
+.hist-viewtoggle { margin: 14px 0 4px; }
+.hist-viewtoggle .seg { width: 100%; }
+.hist-viewtoggle .seg button { flex: 1; }
+
 .sect-title { font-size: 15px; font-weight: 800; margin: 18px 0 10px; color: var(--text); }
+
+.plist { display: flex; flex-direction: column; gap: 8px; }
+.prow {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--raise);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  text-align: left;
+  transition: transform 0.15s var(--spring);
+}
+.prow:active { transform: scale(0.978); }
+.prow.full { border-left-color: var(--c); }
+.prow.part { border-left-color: var(--c-25); }
+.prow.none { border-left-color: rgba(228, 87, 61, 0.35); }
+.prow-label { font-size: 14px; font-weight: 700; }
+.prow-sub { font-size: 12px; color: var(--dim); margin-top: 2px; }
+.prow-val { font-size: 16px; font-weight: 800; }
 
 .daylog { display: flex; flex-direction: column; gap: 8px; }
 .dl {

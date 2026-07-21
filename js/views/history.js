@@ -4,20 +4,23 @@
 
 import {
   todayKey, monthOf, addMonths, cmpMonth, monthGrid, monthLabel,
-  shortDate, timeOf, WEEKDAYS_MIN,
+  shortDate, timeOf, WEEKDAYS_MIN, mondayOf, addWeeks, weekLabel,
+  firstOfMonth, lastOfMonth, addDays,
 } from '../dates.js';
 import {
-  entryFor, effectiveTarget, isHit, dayStatus, trackerStats,
-  fmtAmount, habitCount, habitTarget, hitIntensity,
+  entryFor, effectiveTarget, isHit, dayStatus, trackerStats, firstDayKey,
+  fmtAmount, habitCount, habitTarget, hitIntensity, rangeStats,
 } from '../model.js';
 import { h, icon, accentStyle, haptic, ringSVG } from '../ui.js';
 import { openDayEditor } from './day-editor.js';
 import { openLogSheet } from './log-sheet.js';
-import { openTrackerOptions } from './editors.js';
+import { openTrackerOptions, segmented } from './editors.js';
 
 // UI state that must survive re-renders (any store change re-renders the view)
 const monthMemo = new Map();   // trackerId -> {y, m}
 const logLimit = new Map();    // trackerId -> rows shown
+const viewMemo = new Map();    // trackerId -> 'day' | 'week' | 'month'
+const periodLimit = new Map(); // `${trackerId}:${kind}` -> rows shown
 
 export function renderHistory(root, store, trackerId) {
   const t = store.state.trackers[trackerId];
@@ -29,14 +32,101 @@ export function renderHistory(root, store, trackerId) {
   const nowMonth = monthOf(today);
   let cur = monthMemo.get(trackerId) || nowMonth;
   if (cmpMonth(cur, nowMonth) > 0) cur = nowMonth;
+  const mode = viewMemo.get(trackerId) || 'day';
 
   root.append(h('div', { style: accentStyle(t.color) },
     header(store, t),
     hero(store, t, today, stats),
     statsGrid(t, stats),
-    calendar(store, t, cur, today),
-    dayLog(store, t, today),
+    viewToggle(store, t, mode),
+    mode === 'day'
+      ? h('div', {}, calendar(store, t, cur, today), dayLog(store, t, today))
+      : periodList(store, t, mode, today),
   ));
+}
+
+// Re-renders the whole history view in place — same pattern the calendar
+// nav and "show more" buttons already use, since nothing here is driven by
+// a store change.
+function rerender(store, trackerId) {
+  const view = document.getElementById('view');
+  view.replaceChildren();
+  renderHistory(view, store, trackerId);
+}
+
+function viewToggle(store, t, mode) {
+  return h('div', { class: 'hist-viewtoggle' },
+    segmented([
+      { value: 'day', label: 'Daily' },
+      { value: 'week', label: 'Weekly' },
+      { value: 'month', label: 'Monthly' },
+    ], mode, (v) => { viewMemo.set(t.id, v); rerender(store, t.id); }));
+}
+
+// Weekly/monthly roll-up: most recent period first, each row opens onto the
+// daily calendar for that period so the two views stay one tap apart.
+function periodList(store, t, kind, today) {
+  const days = store.state.days;
+  const first = firstDayKey(t, days) || today;
+  const memoKey = `${t.id}:${kind}`;
+  const limit = periodLimit.get(memoKey) || 12;
+
+  const starts = [];
+  if (kind === 'week') {
+    const floor = mondayOf(first);
+    for (let m = mondayOf(today); m >= floor; m = addWeeks(m, -1)) starts.push(m);
+  } else {
+    const floor = monthOf(first);
+    for (let m = monthOf(today); cmpMonth(m, floor) >= 0; m = addMonths(m, -1)) starts.push(m);
+  }
+
+  if (!starts.length) {
+    return h('div', {},
+      h('div', { class: 'sect-title' }, kind === 'week' ? 'Weekly totals' : 'Monthly totals'),
+      h('div', { class: 'empty-note', style: 'padding:20px' }, 'Nothing logged yet.'));
+  }
+
+  const shown = starts.slice(0, limit).map((start) => {
+    const isWeek = kind === 'week';
+    const label = isWeek ? weekLabel(start, today) : monthLabel(start);
+    const fromKey = isWeek ? start : firstOfMonth(start);
+    const toKey = isWeek ? addDays(start, 6) : lastOfMonth(start);
+    const stat = rangeStats(t, days, fromKey, toKey, today);
+    const ratio = stat.elapsedDays > 0 ? stat.hitDays / stat.elapsedDays : 0;
+    const cls = stat.elapsedDays === 0 ? '' : ratio >= 1 ? 'full' : ratio > 0 ? 'part' : 'none';
+
+    const mainVal = t.type === 'counter'
+      ? `${fmtAmount(t, stat.total)}${t.unit ? ' ' + t.unit : ''}`
+      : `${stat.hitDays}/${stat.elapsedDays}`;
+    const sub = t.type === 'counter'
+      ? `${stat.hitDays} of ${stat.elapsedDays} day${stat.elapsedDays === 1 ? '' : 's'} hit goal`
+      : ((t.perDay || 1) > 1 ? `${stat.checks} check${stat.checks === 1 ? '' : 's'} total` : `${stat.hitDays} day${stat.hitDays === 1 ? '' : 's'} done`);
+
+    return h('button', {
+      class: `prow ${cls}`,
+      onclick: () => {
+        viewMemo.set(t.id, 'day');
+        monthMemo.set(t.id, isWeek ? monthOf(start) : start);
+        haptic(6);
+        rerender(store, t.id);
+      },
+    },
+      h('div', {},
+        h('div', { class: 'prow-label' }, label),
+        h('div', { class: 'prow-sub' }, sub)),
+      h('div', { class: 'prow-val num' }, mainVal));
+  });
+
+  const more = starts.length > limit
+    ? h('button', {
+        class: 'btn btn-ghost show-more',
+        onclick: () => { periodLimit.set(memoKey, limit + 12); rerender(store, t.id); },
+      }, `Show ${Math.min(12, starts.length - limit)} more`)
+    : null;
+
+  return h('div', {},
+    h('div', { class: 'sect-title' }, kind === 'week' ? 'Weekly totals' : 'Monthly totals'),
+    h('div', { class: 'plist' }, shown, more));
 }
 
 function header(store, t) {

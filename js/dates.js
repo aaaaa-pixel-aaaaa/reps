@@ -48,6 +48,27 @@ export function weekdayIndex(key) {
   return (parseKey(key).getDay() + 6) % 7;
 }
 
+// Monday date-key of the week containing this key.
+export function mondayOf(key) {
+  return addDays(key, -weekdayIndex(key));
+}
+
+export function addWeeks(key, n) {
+  return addDays(key, n * 7);
+}
+
+// "14–20 Jul", or "28 Jun – 4 Jul" when the week straddles two months
+// (+ year suffix when it's not the current year).
+export function weekLabel(mondayKey, today = todayKey()) {
+  const start = parseKey(mondayKey);
+  const endKey = addDays(mondayKey, 6);
+  const end = parseKey(endKey);
+  const yearSuffix = mondayKey.slice(0, 4) === today.slice(0, 4) ? '' : ` ${end.getFullYear()}`;
+  return start.getMonth() === end.getMonth()
+    ? `${start.getDate()}–${end.getDate()} ${MONTHS_3[start.getMonth()]}${yearSuffix}`
+    : `${start.getDate()} ${MONTHS_3[start.getMonth()]} – ${end.getDate()} ${MONTHS_3[end.getMonth()]}${yearSuffix}`;
+}
+
 export function monthOf(key) {
   const d = parseKey(key);
   return { y: d.getFullYear(), m: d.getMonth() };
@@ -82,6 +103,14 @@ export function monthGrid(y, m) {
 
 export function monthLabel({ y, m }) {
   return `${MONTHS[m]} ${y}`;
+}
+
+export function firstOfMonth({ y, m }) {
+  return `${y}-${pad2(m + 1)}-01`;
+}
+
+export function lastOfMonth({ y, m }) {
+  return `${y}-${pad2(m + 1)}-${pad2(daysInMonth(y, m))}`;
 }
 
 // "Monday 14 July"

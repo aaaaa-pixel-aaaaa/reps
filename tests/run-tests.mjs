@@ -2,11 +2,12 @@
 import {
   keyOf, parseKey, todayKey, isValidKey, addDays, daysBetween, weekdayIndex,
   monthGrid, monthOf, addMonths, cmpMonth, daysInMonth,
+  mondayOf, addWeeks, weekLabel, firstOfMonth, lastOfMonth,
 } from '../js/dates.js';
 import {
   computedTarget, effectiveTarget, isHit, dayStatus, currentStreak,
   longestStreak, trackerStats, todaySummary, fmtAmount, fmtMinutes,
-  habitCount, habitTarget, hitIntensity,
+  habitCount, habitTarget, hitIntensity, rangeStats,
 } from '../js/model.js';
 import { createStore, normalizeState, validateImport, seedState, demoState } from '../js/store.js';
 import { pinnedTrackers, groupTrackers, reorderContext } from '../js/model.js';
@@ -346,6 +347,45 @@ eq(fmtMinutes(-5), '-5m', 'negative correction');
   const step1 = hitIntensity(c, { total: 20 }, '2026-07-10') - hitIntensity(c, { total: 10 }, '2026-07-10');
   const step2 = hitIntensity(c, { total: 30 }, '2026-07-10') - hitIntensity(c, { total: 20 }, '2026-07-10');
   ok(step1 > step2, 'asymptotic curve: 1x-2x increases more than 2x-3x');
+}
+
+// ---------- weekly/monthly roll-up ----------
+{
+  eq(mondayOf('2026-07-16'), '2026-07-13', 'Thursday rolls back to its Monday');
+  eq(mondayOf('2026-07-13'), '2026-07-13', 'a Monday is its own week start');
+  eq(addWeeks('2026-07-13', -1), '2026-07-06', 'addWeeks steps by 7 days');
+  eq(weekLabel('2026-07-13', '2026-07-16'), '13–19 Jul', 'week fully inside one month');
+  eq(weekLabel('2026-06-29', '2026-07-16'), '29 Jun – 5 Jul', 'week straddling two months');
+  eq(firstOfMonth({ y: 2026, m: 6 }), '2026-07-01', 'first of month (0-indexed month 6 = July)');
+  eq(lastOfMonth({ y: 2026, m: 6 }), '2026-07-31', 'last of month');
+  eq(lastOfMonth({ y: 2026, m: 1 }), '2026-02-28', 'last of Feb in a non-leap year');
+
+  const c = { id: 'c1', type: 'counter', target: { base: 10, mode: 'none' } };
+  const cdays = {
+    '2026-07-13': { c1: { sets: [], total: 12 } },
+    '2026-07-14': { c1: { sets: [], total: 5 } },
+    '2026-07-16': { c1: { sets: [], total: 0, goalOverride: 0 } }, // rest day
+  };
+  const week = rangeStats(c, cdays, '2026-07-13', '2026-07-19', '2026-07-16');
+  eq(week.total, 17, 'counter week total sums logged amounts');
+  eq(week.hitDays, 2, 'counter week hitDays counts the goal-hit day plus the rest day');
+  eq(week.elapsedDays, 4, 'in-progress week only counts elapsed days (Mon-Thu), not the rest of the week');
+
+  const empty = rangeStats(c, {}, '2026-07-13', '2026-07-19', '2026-07-16');
+  eq(empty.total, 0, 'no data: zero total');
+  eq(empty.elapsedDays, 4, 'no data still counts elapsed days');
+
+  const h = { id: 'h1', type: 'habit', perDay: 2 };
+  const hdays2 = {
+    '2026-07-13': { h1: { count: 2 } },
+    '2026-07-14': { h1: { count: 1 } },
+  };
+  const hweek = rangeStats(h, hdays2, '2026-07-13', '2026-07-19', '2026-07-16');
+  eq(hweek.checks, 3, 'habit week sums check-ins across the period');
+  eq(hweek.hitDays, 1, 'habit week only counts days that reached perDay');
+
+  const past = rangeStats(c, cdays, '2026-07-01', '2026-07-31', '2026-07-16');
+  eq(past.elapsedDays, 16, 'a month in progress stops counting at "today", not month end');
 }
 
 // ---------- live timer ----------
