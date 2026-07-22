@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "updatedAt": null,
+  "timezone": "Australia/Sydney",
+  "units": {
+    "kcal": "kcal",
+    "protein": "g",
+    "carbs": "g",
+    "fat": "g",
+    "fibre": "g",
+    "sodium": "mg"
+  },
+  "days": {}
+}
