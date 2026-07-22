@@ -69,19 +69,26 @@ function viewToggle(store, t, mode) {
     ], mode, (v) => { viewMemo.set(t.id, v); rerender(store, t.id); }));
 }
 
-// A week's/month's fill colour: a continuous tint of the tracker's own
-// accent, from a faint hint at 0 up to a near-solid fill at 1 — deliberately
-// not the discrete hit/partial/miss look the daily calendar uses, since a
-// week or month has no single "done" moment to gate on.
-function loadColor(t, boost) {
-  return rgba(t.color, 0.08 + boost * 0.82);
+// A week's/month's fill colour: nothing logged stays uncoloured, any
+// nonzero progress below the gradient's start shows the same flat muted
+// tint the daily calendar uses for a "partial" day, and from lowerMult
+// onward that muted tint continues into a live ramp up to a near-solid
+// fill at upperMult. Only true zero is blank — everything else always
+// shows at least the muted tint, matching how the daily view never
+// leaves real progress looking identical to no progress at all.
+function loadColor(t, achieved, targetSum, lowerMult, upperMult) {
+  if (achieved <= 0) return null;
+  const ratio = targetSum > 0 ? achieved / targetSum : 0;
+  if (ratio < lowerMult) return rgba(t.color, 0.25);
+  const boost = periodIntensity(achieved, targetSum, lowerMult, upperMult);
+  return rgba(t.color, 0.25 + boost * 0.65);
 }
 
-// A gradient strip explaining the gradient: bare colour at `lowerMult`x the
+// A gradient strip explaining the gradient: muted colour at `lowerMult`x the
 // period's total goal, full colour at `upperMult`x.
 function gradientLegend(t, lowerMult, upperMult) {
   return h('div', { class: 'grad-legend' },
-    h('div', { class: 'grad-bar', style: `background:linear-gradient(to right, ${rgba(t.color, 0.08)}, ${t.color})` }),
+    h('div', { class: 'grad-bar', style: `background:linear-gradient(to right, ${rgba(t.color, 0.25)}, ${t.color})` }),
     h('div', { class: 'grad-labels' },
       h('span', {}, `${lowerMult}× goal`),
       h('span', {}, `${upperMult}× goal`)));
@@ -116,15 +123,15 @@ function weekCalendar(store, t, cur, today) {
       const toKey = addDays(monday, 6);
       const stat = rangeStats(t, days, fromKey, toKey, today);
       const achieved = t.type === 'habit' ? stat.checks : stat.total;
-      const boost = periodIntensity(achieved, stat.targetSum, 0.75, 2);
       const future = fromKey > today;
+      const bg = future ? null : loadColor(t, achieved, stat.targetSum, 0.75, 2);
       const mainVal = t.type === 'counter'
         ? `${fmtAmount(t, stat.total)}${t.unit ? ' ' + t.unit : ''}`
         : `${stat.hitDays}/${stat.elapsedDays}`;
 
       return h('button', {
         class: `wk-bar${future ? ' future' : ''}`,
-        style: future ? undefined : `background:${loadColor(t, boost)}`,
+        style: bg ? `background:${bg}` : undefined,
         disabled: future,
         onclick: () => {
           viewMemo.set(t.id, 'day');
@@ -179,13 +186,13 @@ function monthCalendar(store, t, year, today) {
       const toKey = lastOfMonth(mo);
       const stat = rangeStats(t, days, fromKey, toKey, today);
       const achieved = t.type === 'habit' ? stat.checks : stat.total;
-      const boost = periodIntensity(achieved, stat.targetSum, 0.5, 1.25);
       const future = fromKey > today;
+      const bg = future ? null : loadColor(t, achieved, stat.targetSum, 0.5, 1.25);
       const mainVal = t.type === 'counter' ? fmtAmount(t, stat.total) : `${stat.hitDays}/${stat.elapsedDays}`;
 
       cells.push(h('button', {
         class: `mo-cell${future ? ' future' : ''}`,
-        style: future ? undefined : `background:${loadColor(t, boost)}`,
+        style: bg ? `background:${bg}` : undefined,
         disabled: future,
         onclick: () => {
           viewMemo.set(t.id, 'day');
