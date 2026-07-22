@@ -6,6 +6,7 @@ import { renderHome } from './views/home.js';
 import { renderHistory } from './views/history.js';
 import { h } from './ui.js';
 import { refreshNutrition, subscribeNutrition, nutritionData } from './nutrition-store.js';
+import { renderNutritionHistory } from './views/nutrition.js';
 
 const params = new URLSearchParams(location.search);
 const demo = params.get('demo') === '1';
@@ -28,6 +29,9 @@ function parseRoute() {
   if (name === 't' && arg && store.state.trackers[arg]) {
     return { name: 'history', trackerId: arg };
   }
+  if (name === 'nutrition') {
+    return { name: 'nutrition-history' };
+  }
   return { name: 'home' };
 }
 
@@ -43,6 +47,8 @@ function render() {
   viewEl.replaceChildren();
   if (route.name === 'history') {
     renderHistory(viewEl, store, route.trackerId);
+  } else if (route.name === 'nutrition-history') {
+    renderNutritionHistory(viewEl);
   } else {
     renderHome(viewEl, store, { demo });
   }

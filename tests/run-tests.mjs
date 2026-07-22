@@ -15,6 +15,8 @@ import { wrapDelta, stepsFor, angleAt } from '../js/wheel.js';
 import {
   nutrientCurrent, nutrientCoverage, dayEntries, alwaysNutrients, groupedNutrients,
   nutrientHue, barFill, dayQualifies, computeAlerts, summarizeAlerts,
+  nutrientHit, nutrientDayStatus, allGoalsHit, nutritionCurrentStreak,
+  nutritionLongestStreak, nutritionStats,
 } from '../js/nutrition.js';
 
 let passed = 0;
@@ -719,6 +721,64 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
     alertRules,
   };
   eq(computeAlerts(rangeFeed, today).length, 0, '"range" nutrient far under target on every day: no low-side alert');
+}
+
+// -- nutrition history: per-nutrient day status, "all goals hit" streaks --
+{
+  const nutrients = {
+    energy: { label: 'Energy', target: 3100, direction: 'range', group: 'macro', display: 'always' },
+    protein: { label: 'Protein', target: 150, direction: 'min', group: 'macro', display: 'always' },
+    sodium: { label: 'Sodium', target: 2300, direction: 'max', group: 'mineral', display: 'monitor' },
+    cholesterol: { label: 'Cholesterol', target: null, direction: 'none', group: 'macro', display: 'monitor' },
+  };
+  const minDef = nutrients.protein;
+  const maxDef = nutrients.sodium;
+  const noneDef = nutrients.cholesterol;
+
+  eq(nutrientHit(minDef, 200), true, 'min: above target hits');
+  eq(nutrientHit(minDef, 100), false, 'min: below target misses');
+  eq(nutrientHit(minDef, null), false, 'min: unknown never hits');
+  eq(nutrientHit(maxDef, 2000), true, 'max: under the limit hits');
+  eq(nutrientHit(maxDef, 2500), false, 'max: over the limit misses');
+  eq(nutrientHit(noneDef, 999), false, 'direction "none" never hits — no goal to satisfy');
+
+  const today = '2026-07-20';
+  eq(nutrientDayStatus(minDef, undefined, 'protein', '2026-07-15', today), 'empty', 'no entry logged: empty, not miss');
+  eq(nutrientDayStatus(minDef, undefined, 'protein', today, today), 'pending', 'today, nothing yet: pending');
+  eq(nutrientDayStatus(minDef, undefined, 'protein', '2026-07-25', today), 'future', 'after today: future');
+  eq(nutrientDayStatus(minDef, { totals: { protein: 200 } }, 'protein', '2026-07-15', today), 'hit', 'logged and above target: hit');
+  eq(nutrientDayStatus(minDef, { totals: { protein: 50 } }, 'protein', '2026-07-15', today), 'miss', 'logged but below target: miss');
+
+  ok(!allGoalsHit(nutrients, undefined), 'no day at all: goals not hit');
+  ok(!allGoalsHit(nutrients, { totals: { energy: 3200, protein: 200 } }), 'range nutrient over target: not all goals hit');
+  ok(allGoalsHit(nutrients, { totals: { energy: 3050, protein: 200 } }), 'every always-displayed nutrient satisfied: all goals hit');
+  ok(!allGoalsHit(nutrients, { totals: { energy: 3050 } }), 'protein missing entirely: not all goals hit (absent never counts as met)');
+
+  const days = {
+    '2026-07-18': { totals: { energy: 3050, protein: 200 } }, // hit
+    '2026-07-19': { totals: { energy: 3050, protein: 200 } }, // hit
+    '2026-07-20': { totals: { energy: 3050, protein: 200 } }, // hit (today)
+  };
+  eq(nutritionCurrentStreak(nutrients, days, today), 3, 'three consecutive all-goals-hit days ending today');
+  eq(nutritionLongestStreak(nutrients, days, today), 3, 'longest streak matches the current run here');
+
+  const gapDays = {
+    '2026-07-15': { totals: { energy: 3050, protein: 200 } },
+    '2026-07-16': { totals: { energy: 3050, protein: 200 } },
+    '2026-07-17': { totals: { energy: 1000, protein: 50 } }, // breaks it
+    '2026-07-20': { totals: { energy: 3050, protein: 200 } },
+  };
+  eq(nutritionCurrentStreak(nutrients, gapDays, today), 1, 'current streak only counts back to the most recent break');
+  eq(nutritionLongestStreak(nutrients, gapDays, today), 2, 'longest streak finds the earlier 2-day run');
+
+  // An empty totals object (present but nothing recorded) must not count
+  // as "logged" — otherwise a day could show as logged with no data at all.
+  const statsData = { nutrients, days: { ...gapDays, '2026-07-14': { totals: {} } } };
+  const stats = nutritionStats(statsData, today);
+  eq(stats.loggedDays, 4, 'loggedDays counts real totals, not the empty-totals day');
+  eq(stats.goalsHitDays, 3, 'goalsHitDays only counts the ones where every always-nutrient hit');
+  eq(stats.currentStreak, 1, 'stats include the current streak');
+  eq(stats.longestStreak, 2, 'stats include the longest streak');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

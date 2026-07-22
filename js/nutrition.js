@@ -196,3 +196,85 @@ export function summarizeAlerts(alerts) {
   }
   return `${alerts.length} nutrients need attention`;
 }
+
+// ---- history page: per-nutrient day status, streaks, overall stats ----
+
+// Whether a single value satisfies a nutrient's own goal — a plain boolean,
+// unlike barFill's continuous ratio, for calendar/streak purposes.
+// direction:"none" has no goal to satisfy, so it's never "hit".
+export function nutrientHit(def, current) {
+  if (current == null || def.target == null || !(def.target > 0)) return false;
+  if (def.direction === 'min') return current >= def.target;
+  if (def.direction === 'max' || def.direction === 'range') return current <= def.target;
+  return false;
+}
+
+// Calendar cell status for one nutrient on one day, mirroring dayStatus in
+// model.js: 'future' | 'pending' (today, nothing yet) | 'hit' | 'miss' |
+// 'empty' (no entry logged that day at all — distinct from a real miss).
+export function nutrientDayStatus(def, day, key, dateKey, today = todayKey()) {
+  if (dateKey > today) return 'future';
+  const current = nutrientCurrent(day, key);
+  if (current == null) return dateKey === today ? 'pending' : 'empty';
+  return nutrientHit(def, current) ? 'hit' : 'miss';
+}
+
+// A day "succeeds" only if every home-tile nutrient (energy plus whichever
+// others carry display:"always") hit its own goal — missing data for any
+// of them means the day doesn't count, same as a tracker's isHit treating
+// an absent entry as not-yet-done rather than silently skipping it.
+export function allGoalsHit(nutrients, day) {
+  const goals = [['energy', nutrients.energy], ...alwaysNutrients(nutrients)].filter(([, def]) => def);
+  if (!goals.length) return false;
+  return goals.every(([key, def]) => nutrientHit(def, nutrientCurrent(day, key)));
+}
+
+export function nutritionCurrentStreak(nutrients, days, today = todayKey()) {
+  let d = today;
+  if (!allGoalsHit(nutrients, days[d])) d = addDays(d, -1);
+  let n = 0;
+  while (allGoalsHit(nutrients, days[d])) {
+    n++;
+    d = addDays(d, -1);
+  }
+  return n;
+}
+
+export function nutritionLongestStreak(nutrients, days, today = todayKey()) {
+  const keys = Object.keys(days).filter((k) => k <= today).sort();
+  if (!keys.length) return 0;
+  let best = 0;
+  let run = 0;
+  for (let d = keys[0]; d <= today; d = addDays(d, 1)) {
+    if (allGoalsHit(nutrients, days[d])) {
+      run++;
+      if (run > best) best = run;
+    } else if (d !== today) {
+      run = 0; // today still in progress doesn't reset the run
+    }
+  }
+  return best;
+}
+
+// All-time stats for the nutrition history page. A day counts as "logged"
+// if it recorded any totals at all — checked against totals rather than
+// entries, since totals (not entries) is what every other reader in this
+// module treats as the source of truth for "does this day have data".
+export function nutritionStats(data, today = todayKey()) {
+  const { nutrients, days } = data;
+  let loggedDays = 0;
+  let goalsHitDays = 0;
+  for (const key in days) {
+    if (key > today) continue;
+    const totals = days[key] && days[key].totals;
+    if (!totals || !Object.keys(totals).length) continue;
+    loggedDays++;
+    if (allGoalsHit(nutrients, days[key])) goalsHitDays++;
+  }
+  return {
+    loggedDays,
+    goalsHitDays,
+    currentStreak: nutritionCurrentStreak(nutrients, days, today),
+    longestStreak: nutritionLongestStreak(nutrients, days, today),
+  };
+}

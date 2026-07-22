@@ -3,10 +3,13 @@
 // end to end — there is no editing UI here, by design; the source file is
 // written outside the app.
 
-import { todayKey, shortDate } from '../dates.js';
+import {
+  todayKey, shortDate, monthOf, addMonths, cmpMonth, monthGrid, monthLabel, WEEKDAYS_MIN,
+} from '../dates.js';
 import {
   groupedNutrients, alwaysNutrients, nutrientCurrent, nutrientCoverage,
   dayEntries, barFill, nutrientHue, computeAlerts, summarizeAlerts, RED_HUE,
+  nutrientDayStatus, nutritionStats,
 } from '../nutrition.js';
 import { nutritionData } from '../nutrition-store.js';
 import { h, icon, haptic, openSheet, toast, countUp, ringSVG } from '../ui.js';
@@ -162,6 +165,10 @@ export function renderNutritionTile() {
     tabindex: '0',
     onclick: () => openNutritionSheet(today),
   },
+    h('button', {
+      class: 'dots', 'aria-label': 'Nutrition history & stats',
+      onclick: (e) => { e.stopPropagation(); location.hash = 'nutrition'; },
+    }, icon('cal')),
     h('div', { class: 'nutri-main' },
       h('div', { class: 'nutri-energy' },
         h('div', { class: 'ringbox' }, energyRing(progress, color),
@@ -175,6 +182,131 @@ export function renderNutritionTile() {
       onclick: (e) => { e.stopPropagation(); haptic(8); openNutritionSheet(today, { scrollToWarnings: true }); },
     }, summary) : null,
   );
+}
+
+// ---- history & stats page ----
+// A single global page (unlike per-tracker history, there's only one
+// nutrition feed), reachable via #/nutrition from the tile's history
+// button. Lets you pick any nutrient with a real target and page through
+// a month calendar of hit/miss/no-data days for it, mirroring the
+// tracker history page's daily calendar shape and interactions exactly.
+
+let historyMonth = null;    // remembered month across re-renders
+let historyNutrient = 'energy';
+
+function historyHeader() {
+  return h('div', { class: 'hist-top' },
+    h('button', { class: 'icon-btn', 'aria-label': 'Back', onclick: () => { location.hash = ''; } }, icon('chevL')),
+    h('div', { class: 'view-title' }, h('span', { class: 'tdot' }), h('span', {}, 'Nutrition')),
+  );
+}
+
+function historyStatsGrid(stats) {
+  const cell = (val, label, sub) => h('div', { class: 'stat' },
+    h('b', { class: 'num' }, val, sub ? h('small', {}, ` ${sub}`) : null),
+    h('span', {}, label));
+  return h('div', { class: 'stats' },
+    cell(String(stats.loggedDays), 'days logged'),
+    cell(String(stats.goalsHitDays), 'goals hit'),
+    cell(String(stats.currentStreak), 'current streak', stats.currentStreak === 1 ? 'day' : 'days'),
+    cell(String(stats.longestStreak), 'longest streak', stats.longestStreak === 1 ? 'day' : 'days'));
+}
+
+// direction:"none" nutrients have no target to judge a day against, so
+// they're left out of the picker entirely rather than offering a calendar
+// that can never show anything but "no data".
+function nutrientPicker(nutrients, selected, onChange) {
+  const options = groupedNutrients(nutrients).map(({ label, items }) => {
+    const eligible = items.filter(([, def]) => def.direction !== 'none');
+    if (!eligible.length) return null;
+    return h('optgroup', { label },
+      eligible.map(([key, def]) => h('option', { value: key, selected: key === selected }, def.label)));
+  }).filter(Boolean);
+  const select = h('select', { class: 'input' }, options);
+  select.value = selected;
+  select.addEventListener('change', () => onChange(select.value));
+  return h('div', { class: 'field' }, h('label', {}, 'viewing'), select);
+}
+
+function nutritionCalendarLegend() {
+  const item = (style, label) => h('span', {}, h('i', { style }), label);
+  return h('div', { class: 'cal-legend' },
+    item('background:var(--c)', 'goal met'),
+    item('background:rgba(228,87,61,0.28)', 'missed'),
+    item('background:transparent;border:1px solid var(--line)', 'no data'));
+}
+
+function nutritionCalendar(data, key, today) {
+  const def = data.nutrients[key];
+  const days = data.days;
+  const nowMonth = monthOf(today);
+  let cur = historyMonth || nowMonth;
+  if (cmpMonth(cur, nowMonth) > 0) cur = nowMonth;
+
+  const nav = (delta) => {
+    const next = addMonths(cur, delta);
+    if (cmpMonth(next, nowMonth) > 0) return;
+    historyMonth = next;
+    haptic(6);
+    rebuild(next);
+  };
+
+  const box = h('div', { class: 'cal' });
+
+  function rebuild(m) {
+    cur = m;
+    box.replaceChildren(
+      h('div', { class: 'cal-head' },
+        h('div', { class: 'cal-month' }, monthLabel(m)),
+        h('div', { class: 'cal-nav' },
+          h('button', { class: 'icon-btn', 'aria-label': 'previous month', onclick: () => nav(-1) }, icon('chevL')),
+          h('button', {
+            class: 'icon-btn', 'aria-label': 'next month',
+            disabled: cmpMonth(m, nowMonth) >= 0, onclick: () => nav(1),
+          }, icon('chevR')))),
+      h('div', { class: 'cal-grid' },
+        WEEKDAYS_MIN.map((d) => h('div', { class: 'cal-dow' }, d)),
+        monthGrid(m.y, m.m).flat().map((dateKey) => {
+          if (!dateKey) return h('div', {});
+          const status = nutrientDayStatus(def, days[dateKey], key, dateKey, today);
+          return h('button', {
+            class: `cal-cell num ${status} ${dateKey === today ? 'today' : ''}`,
+            disabled: status === 'future',
+            'aria-label': `${dateKey}: ${status}`,
+            onclick: () => openNutritionSheet(dateKey),
+          }, String(Number(dateKey.slice(8))));
+        })),
+      nutritionCalendarLegend(),
+    );
+  }
+  rebuild(cur);
+  return box;
+}
+
+export function renderNutritionHistory(root) {
+  const data = nutritionData();
+  if (!data || !data.nutrients || !data.nutrients.energy) { location.hash = ''; return; }
+  const today = todayKey();
+  const stats = nutritionStats(data, today);
+  if (!data.nutrients[historyNutrient]) historyNutrient = 'energy';
+
+  const wrap = h('div', { style: `--c:${barColor(nutrientHue(historyNutrient), 1, 0)}` });
+  const calBox = h('div', {});
+  const rebuildCal = () => calBox.replaceChildren(nutritionCalendar(data, historyNutrient, today));
+  rebuildCal();
+
+  wrap.append(
+    historyHeader(),
+    historyStatsGrid(stats),
+    nutrientPicker(data.nutrients, historyNutrient, (key) => {
+      historyNutrient = key;
+      historyMonth = null; // a freshly picked nutrient starts back at the current month
+      wrap.style.setProperty('--c', barColor(nutrientHue(key), 1, 0));
+      rebuildCal();
+    }),
+    calBox,
+  );
+  root.append(wrap);
 }
 
 // ---- detail sheet ----
