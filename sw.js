@@ -1,7 +1,12 @@
 // Versioned cache-first service worker. Bump VERSION on every deploy that
-// changes any asset — that is the whole update mechanism.
-const VERSION = 'reps-v1.0.13';
+// changes any asset — that is the whole update mechanism. The one exception
+// is nutrition.json: it's maintained outside this repo, so it's served
+// network-first with a cache fallback instead (see the fetch handler below)
+// — cache-first would mean updates to it never reach an installed app.
+const VERSION = 'reps-v1.0.14';
 const CACHE = `reps-${VERSION}`;
+
+const NUTRITION_URL = 'https://raw.githubusercontent.com/aaaaa-pixel-aaaaa/reps/main/nutrition.json';
 
 const ASSETS = [
   './',
@@ -14,12 +19,15 @@ const ASSETS = [
   './js/store.js',
   './js/ui.js',
   './js/wheel.js',
+  './js/nutrition.js',
+  './js/nutrition-store.js',
   './js/views/home.js',
   './js/views/history.js',
   './js/views/log-sheet.js',
   './js/views/day-editor.js',
   './js/views/editors.js',
   './js/views/settings.js',
+  './js/views/nutrition.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',
@@ -43,7 +51,23 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const req = e.request;
-  if (req.method !== 'GET' || !req.url.startsWith(self.location.origin)) return;
+  if (req.method !== 'GET') return;
+
+  if (req.url === NUTRITION_URL) {
+    // Network-first: try the live file, cache whatever we get so offline
+    // reads still have something. Never throw — a missing cache entry on
+    // failure just resolves undefined and the app's own fetch() rejects,
+    // which nutrition-store.js already treats as "no update this time".
+    e.respondWith(
+      fetch(req, { cache: 'no-store' }).then((res) => {
+        if (res.ok) caches.open(CACHE).then((c) => c.put(req, res.clone()));
+        return res;
+      }).catch(() => caches.match(req))
+    );
+    return;
+  }
+
+  if (!req.url.startsWith(self.location.origin)) return;
   e.respondWith(
     // ignoreSearch so "./?demo=1" still resolves to the cached app shell.
     caches.match(req, { ignoreSearch: req.mode === 'navigate' }).then((hit) => {

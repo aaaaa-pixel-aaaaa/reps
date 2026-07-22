@@ -178,6 +178,103 @@ input, select, textarea { font: inherit; color: inherit; }
 
 .card-sub { font-size: 12px; color: var(--dim); margin-top: -6px; }
 
+/* ---------- nutrition tile ---------- */
+
+.nutri-card { align-items: stretch; text-align: left; gap: 12px; padding: 16px 14px; }
+.nutri-main { display: flex; gap: 14px; }
+
+.nutri-energy { flex: 0 0 35%; display: flex; align-items: center; justify-content: center; min-width: 0; }
+.nutri-energy .ringbox { width: 92px; height: 92px; }
+.nutri-energy .ring-val { font-size: 22px; }
+
+.nutri-bars { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 9px; }
+
+.nutri-row { display: flex; flex-direction: column; gap: 5px; justify-content: center; min-height: 26px; }
+.nutri-row-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.nutri-row-label-group { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.nutri-row-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nutri-row-val { font-size: 11.5px; color: var(--dim); font-weight: 600; flex: none; }
+.nutri-row-plain { flex-direction: row; align-items: center; justify-content: space-between; min-height: 0; }
+.nutri-row-plain .nutri-row-val { font-size: 13px; }
+
+.nutri-track { position: relative; height: 6px; border-radius: 999px; background: var(--raise3); }
+.nutri-fill { height: 100%; border-radius: 999px; transition: width 0.5s var(--spring), background-color 0.4s ease; }
+.nutri-marker {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  right: 0;
+  width: 2px;
+  border-radius: 1px;
+  background: rgba(255, 240, 220, 0.55);
+}
+
+.nutri-alert-strip {
+  width: 100%;
+  background: rgba(228, 87, 61, 0.14);
+  color: #FF8A73;
+  border-radius: 11px;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-align: left;
+  transition: transform 0.15s var(--spring);
+}
+.nutri-alert-strip:active { transform: scale(0.98); }
+
+/* coverage dot: solid = full coverage, hollow = partial, dash = unknown */
+.nutri-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--dim); }
+.nutri-dot.partial { background: transparent; border: 1.5px solid var(--dim); }
+.nutri-dot.unknown { width: auto; height: auto; background: none; color: var(--faint); font-weight: 800; font-size: 12px; }
+
+.nutri-badge {
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  flex: none;
+  font-size: 10px;
+  font-weight: 800;
+  font-style: normal;
+  display: grid;
+  place-items: center;
+  background: var(--raise3);
+  color: var(--dim);
+}
+.nutri-badge.unconfirmed { color: #E8C268; border: 1px solid rgba(232, 194, 104, 0.4); }
+
+/* ---------- nutrition detail sheet ---------- */
+
+.nutri-group, .nutri-warn { margin-bottom: 8px; }
+.nutri-group-head, .nutri-warn-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 10px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  background: var(--raise);
+}
+.nutri-group-head:active, .nutri-warn-head:active { background: var(--raise2); }
+.nutri-group-name, .nutri-warn-label { font-size: 15px; font-weight: 800; flex: 1; }
+.nutri-group-count, .nutri-warn-count { color: var(--faint); font-size: 13px; font-weight: 600; }
+.nutri-group-chev, .nutri-warn-chev { color: var(--faint); transition: transform 0.25s var(--spring); flex: none; }
+.nutri-group-chev svg, .nutri-warn-chev svg { width: 18px; height: 18px; display: block; }
+.nutri-group.collapsed .nutri-group-chev, .nutri-warn.collapsed .nutri-warn-chev { transform: rotate(-90deg); }
+.nutri-group-body { display: flex; flex-direction: column; gap: 16px; padding: 16px 10px 4px; }
+.nutri-group.collapsed .nutri-group-body { display: none; }
+
+.nutri-warn-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.nutri-warn-days { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 10px 4px; }
+.nutri-warn.collapsed .nutri-warn-days { display: none; }
+.nutri-warn-list { display: flex; flex-direction: column; gap: 8px; }
+
 /* progress ring */
 .ringbox { position: relative; width: 108px; height: 108px; }
 .ringbox svg { width: 100%; height: 100%; transform: rotate(-90deg); display: block; }
@@ -186,7 +283,7 @@ input, select, textarea { font: inherit; color: inherit; }
   fill: none;
   stroke: var(--c);
   stroke-linecap: round;
-  transition: stroke-dashoffset 0.5s var(--spring);
+  transition: stroke-dashoffset 0.5s var(--spring), stroke 0.4s ease;
 }
 .done .ring-prog { filter: drop-shadow(0 0 7px var(--c-70)); }
 .ring-label {

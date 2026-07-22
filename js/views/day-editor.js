@@ -9,6 +9,20 @@ import {
 } from '../model.js';
 import { stampFor } from '../store.js';
 import { h, icon, haptic, openSheet, toast, reducedMotion } from '../ui.js';
+import { nutritionData } from '../nutrition-store.js';
+import { openNutritionSheet } from './nutrition.js';
+
+// Reachable from any day, past or present — nutrition-store.js is read-only
+// and tracker-independent, so this shows up regardless of which tracker's
+// day editor it was opened from. Omitted entirely if the feed has never
+// loaded (matches the "never block, never error" rule for this feature).
+function nutritionLink(dateKey) {
+  if (!nutritionData()) return null;
+  return h('button', {
+    class: 'linklike',
+    onclick: () => openNutritionSheet(dateKey),
+  }, 'View nutrition this day');
+}
 
 export function openDayEditor(store, trackerId, dateKey) {
   const t = store.state.trackers[trackerId];
@@ -55,7 +69,7 @@ export function openDayEditor(store, trackerId, dateKey) {
         const goalBtns = h('div', { style: 'display:flex;gap:6px' });
         const goalRow = h('div', { class: 'goalrow' }, goalInfo, goalBtns);
 
-        body.append(toggle, status, removeOne, goalRow);
+        body.append(...[toggle, status, removeOne, goalRow, nutritionLink(dateKey)].filter(Boolean));
 
         const update = () => {
           const e = entry();
@@ -190,7 +204,7 @@ export function openDayEditor(store, trackerId, dateKey) {
           },
         }, 'Set'));
 
-      body.append(
+      body.append(...[
         h('div', { class: 'de-total' },
           minus,
           h('div', {}, totalNum, h('small', { style: 'display:block;text-align:center;font-size:13px;color:var(--dim);font-weight:600' }, unit || 'total')),
@@ -203,7 +217,8 @@ export function openDayEditor(store, trackerId, dateKey) {
         goalEditRow,
         h('div', { class: 'sheet-section' }, 'Logged sets'),
         setsBox,
-      );
+        nutritionLink(dateKey),
+      ].filter(Boolean));
 
       function update() {
         const e = entry();

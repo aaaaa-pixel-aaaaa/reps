@@ -5,6 +5,7 @@ import { createStore, STORAGE_KEY, DEMO_KEY, demoState, seedState } from './stor
 import { renderHome } from './views/home.js';
 import { renderHistory } from './views/history.js';
 import { h } from './ui.js';
+import { refreshNutrition, subscribeNutrition, nutritionData } from './nutrition-store.js';
 
 const params = new URLSearchParams(location.search);
 const demo = params.get('demo') === '1';
@@ -15,6 +16,7 @@ export const store = createStore({
   seed: demo ? demoState : seedState,
 });
 window.__reps = store; // console access for debugging/rescue
+window.__nutrition = { get: nutritionData, refresh: refreshNutrition }; // read-only — see nutrition-store.js
 
 const viewEl = document.getElementById('view');
 const scrollMemo = new Map();
@@ -61,16 +63,22 @@ function scheduleRender() {
 }
 
 store.subscribe(scheduleRender);
+subscribeNutrition(scheduleRender);
 window.addEventListener('hashchange', render);
 
 // Re-render when the app resumes on a new day (iOS keeps PWAs suspended for
-// ages; "today" must not go stale).
+// ages; "today" must not go stale). Also re-fetch nutrition.json here —
+// it's maintained outside the app, so reopening from the home screen is
+// the natural moment to pick up edits made elsewhere.
 let lastRenderDay = new Date().getDate();
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && new Date().getDate() !== lastRenderDay) {
+  if (document.hidden) return;
+  refreshNutrition();
+  if (new Date().getDate() !== lastRenderDay) {
     lastRenderDay = new Date().getDate();
     render();
   }
 });
 
+refreshNutrition();
 render();

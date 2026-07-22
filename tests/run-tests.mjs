@@ -12,6 +12,10 @@ import {
 import { createStore, normalizeState, validateImport, seedState, demoState } from '../js/store.js';
 import { pinnedTrackers, groupTrackers, reorderContext } from '../js/model.js';
 import { wrapDelta, stepsFor, angleAt } from '../js/wheel.js';
+import {
+  nutrientCurrent, nutrientCoverage, dayEntries, alwaysNutrients, groupedNutrients,
+  nutrientHue, barFill, dayQualifies, computeAlerts, summarizeAlerts,
+} from '../js/nutrition.js';
 
 let passed = 0;
 let failed = 0;
@@ -579,6 +583,142 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
   }
   // 150->170 (+20), 170->-175 (+15), then +25 +30 +30 = 120 total
   eq(accum, 120, 'drag across seam accumulates continuously');
+}
+
+// ---------- nutrition ----------
+
+// -- absent vs zero --
+{
+  eq(nutrientCurrent(undefined, 'protein'), null, 'no day at all: unknown, not zero');
+  eq(nutrientCurrent({ totals: {} }, 'protein'), null, 'nutrient absent from totals: unknown, not zero');
+  eq(nutrientCurrent({ totals: { protein: 0 } }, 'protein'), 0, 'an explicit 0 is a real zero, not unknown');
+  eq(nutrientCoverage(undefined, 'protein'), 0, 'no day: coverage reads as 0');
+  eq(nutrientCoverage({ coverage: { protein: 40 } }, 'protein'), 40, 'coverage passes through');
+  eq(dayEntries(undefined), [], 'no day: no entries');
+  eq(dayEntries({ entries: [{ item: 'Eggs' }] }).length, 1, 'entries pass through');
+}
+
+// -- always-displayed / grouping, driven off the field --
+{
+  const nutrients = {
+    energy: { label: 'Energy', group: 'macro', display: 'always', direction: 'range' },
+    protein: { label: 'Protein', group: 'macro', display: 'always', direction: 'min' },
+    fibre: { label: 'Fibre', group: 'macro', display: 'always', direction: 'min' },
+    satFat: { label: 'Saturated fat', group: 'macro', display: 'monitor', direction: 'max' },
+    omega3ALA: { label: 'Omega-3 (ALA)', group: 'fat', display: 'monitor', direction: 'min' },
+    zinc: { label: 'Zinc', group: 'mineral', display: 'monitor', direction: 'min' },
+  };
+  eq(alwaysNutrients(nutrients).map(([k]) => k), ['protein', 'fibre'], 'energy excluded, JSON key order kept, monitor-only skipped');
+  const grouped = groupedNutrients(nutrients);
+  eq(grouped.map((g) => g.group), ['macro', 'fat', 'mineral'], 'groups in GROUP_ORDER, empty vitamin group omitted');
+  eq(grouped[0].items.map(([k]) => k), ['energy', 'protein', 'fibre', 'satFat'], 'group members in JSON key order, both display kinds included');
+}
+
+// -- nutrient hue: deterministic, not a single shared accent --
+{
+  eq(nutrientHue('protein'), nutrientHue('protein'), 'same key always yields the same hue');
+  ok(nutrientHue('protein') !== nutrientHue('carbs'), 'different nutrients get different hues');
+  const h = nutrientHue('sodium');
+  ok(h >= 0 && h < 360, 'hue is a valid degree value');
+}
+
+// -- bar fill math --
+{
+  const minDef = { target: 150, direction: 'min' };
+  eq(barFill(minDef, null).unknown, true, 'no value: unknown');
+  eq(barFill(minDef, null).widthPct, 0, 'unknown: zero width');
+  eq(barFill(minDef, 75).widthPct, 50, 'min, half of target: half width');
+  eq(barFill(minDef, 75).chromaT, 0.5, 'chroma tracks width below target');
+  eq(barFill(minDef, 300).widthPct, 100, 'min, double target: width holds at 100%');
+  eq(barFill(minDef, 300).overshootT, 0, 'exceeding a minimum never reddens');
+  eq(barFill(minDef, 300).showMarker, false, 'a minimum has no boundary marker');
+
+  const maxDef = { target: 2300, direction: 'max', softMax: 3600 };
+  eq(barFill(maxDef, 1150).widthPct, 50, 'max, half of target: half width, same as min');
+  eq(barFill(maxDef, 1150).overshootT, 0, 'under the limit: no red yet');
+  eq(barFill(maxDef, 2300).widthPct, 100, 'max, exactly at target: full width');
+  eq(barFill(maxDef, 2300).overshootT, 0, 'exactly at the limit: not yet overshooting');
+  eq(barFill(maxDef, 2950).widthPct, 100, 'max, past target: width holds at 100%, does not keep growing');
+  eq(Math.round(barFill(maxDef, 2950).overshootT * 100), 50, 'halfway from target to softMax: half reddened');
+  eq(barFill(maxDef, 3600).overshootT, 1, 'at softMax: fully reddened');
+  eq(barFill(maxDef, 5000).overshootT, 1, 'past softMax: stays capped, does not overflow past 1');
+  eq(barFill(maxDef, 1150).showMarker, true, 'max/range nutrients get a boundary marker');
+
+  const rangeNoSoftMax = { target: 411, direction: 'range' }; // e.g. carbs in the real feed
+  eq(barFill(rangeNoSoftMax, 500).overshootT, 1, 'no softMax defined: any exceedance reads as fully red');
+
+  const noneDef = { target: null, direction: 'none' };
+  eq(barFill(noneDef, 120).widthPct, 0, 'no target at all: no bar to fill');
+  eq(barFill(noneDef, 120).unknown, false, 'a real value with no target is still known, just not barred');
+}
+
+// -- alert qualification and detection --
+{
+  const alertRules = {
+    windowDays: 10, qualifyingDaysRequired: 5, lowThresholdPct: 70, highThresholdPct: 100,
+    minCoveragePct: 80, minConfidence: 'medium',
+    allowedTargetConfidence: ['confirmed', 'guideline', 'derived'],
+  };
+  const proteinDef = { label: 'Protein', target: 150, direction: 'min', group: 'macro', targetConfidence: 'derived' };
+  const highEntry = { macroConfidence: 'high', microConfidence: 'high' };
+  const lowEntry = { macroConfidence: 'low', microConfidence: 'low' };
+
+  ok(!dayQualifies(alertRules, proteinDef, undefined, 'protein'), 'no day at all: never qualifies');
+  ok(!dayQualifies(alertRules, proteinDef, { coverage: { protein: 50 }, entries: [highEntry] }, 'protein'),
+    'coverage below minCoveragePct: does not qualify');
+  ok(!dayQualifies(alertRules, proteinDef, { coverage: { protein: 90 }, entries: [] }, 'protein'),
+    'good coverage but no entries at all: cannot establish confidence, does not qualify');
+  ok(!dayQualifies(alertRules, proteinDef, { coverage: { protein: 90 }, entries: [lowEntry] }, 'protein'),
+    'coverage fine but confidence below minConfidence: does not qualify');
+  ok(dayQualifies(alertRules, proteinDef, { coverage: { protein: 90 }, entries: [highEntry] }, 'protein'),
+    'coverage and confidence both clear the bar: qualifies');
+  ok(!dayQualifies(alertRules, proteinDef, { coverage: { protein: 90 }, entries: [highEntry, lowEntry] }, 'protein'),
+    'one low-confidence entry drags the whole day below the floor (worst-of-day)');
+
+  const today = '2026-07-20';
+  const mkDay = (protein, entry = highEntry) => ({
+    totals: { protein }, coverage: { protein: 90 }, entries: [entry],
+  });
+  // 6 of the last 10 days breach (below 70% of 150 = 105); qualifyingDaysRequired is 5.
+  const days = {};
+  const breachAmounts = [50, 60, 70, 200, 40, 80, 200, 200, 200, 30]; // today back to 9 days ago; 6 of these are under 70% of 150
+  breachAmounts.forEach((amt, i) => {
+    const key = i === 0 ? today : `2026-07-${String(20 - i).padStart(2, '0')}`;
+    days[key] = mkDay(amt);
+  });
+  const feed = { nutrients: { protein: proteinDef }, days, alertRules };
+  const alerts = computeAlerts(feed, today);
+  eq(alerts.length, 1, 'one nutrient breaches its threshold enough to alert');
+  eq(alerts[0].key, 'protein', 'the breaching nutrient is identified');
+  eq(alerts[0].breachDays.length, 6, '6 of the 10 days were below 70% of target');
+  eq(summarizeAlerts(alerts), 'Protein low — 6 of last 10 days', 'single-alert message matches the spec example');
+  eq(summarizeAlerts([]), null, 'no alerts: no message, no empty-state text');
+  eq(summarizeAlerts([alerts[0], alerts[0]]), '2 nutrients need attention', 'multiple alerts summarize to a count');
+
+  // direction:"none" never alerts, regardless of how the numbers would read.
+  const noneFeed = {
+    nutrients: { cholesterol: { label: 'Cholesterol', target: null, direction: 'none', targetConfidence: 'confirmed' } },
+    days: { [today]: mkDay(9999) },
+    alertRules,
+  };
+  eq(computeAlerts(noneFeed, today).length, 0, 'direction "none" never alerts');
+
+  // targetConfidence not in allowedTargetConfidence never alerts, even with real breaches.
+  const unconfirmedFeed = {
+    nutrients: { omega3LC: { label: 'Omega-3 (EPA+DHA+DPA)', target: 610, direction: 'min', group: 'fat', targetConfidence: 'unconfirmed' } },
+    days: Object.fromEntries(Object.keys(days).map((k) => [k, { totals: { omega3LC: 10 }, coverage: { omega3LC: 90 }, entries: [highEntry] }])),
+    alertRules,
+  };
+  eq(computeAlerts(unconfirmedFeed, today).length, 0, 'targetConfidence outside allowedTargetConfidence never alerts, even 10/10 days low');
+
+  // "range" only ever checks the high side — a range nutrient sitting far
+  // under target every single day should never fire.
+  const rangeFeed = {
+    nutrients: { carbs: { label: 'Carbohydrate', target: 411, direction: 'range', group: 'macro', targetConfidence: 'derived' } },
+    days: Object.fromEntries(Object.keys(days).map((k) => [k, { totals: { carbs: 50 }, coverage: { carbs: 90 }, entries: [highEntry] }])),
+    alertRules,
+  };
+  eq(computeAlerts(rangeFeed, today).length, 0, '"range" nutrient far under target on every day: no low-side alert');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

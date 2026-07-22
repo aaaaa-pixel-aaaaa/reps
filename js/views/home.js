@@ -11,6 +11,7 @@ import { h, icon, accentStyle, haptic, ringSVG, reducedMotion, openSheet } from 
 import { openLogSheet } from './log-sheet.js';
 import { openTrackerOptions, openTrackerEditor, openGroupEditor, openGroupOptions } from './editors.js';
 import { openSettings } from './settings.js';
+import { renderNutritionTile } from './nutrition.js';
 
 // Remembered ring progress + queued toggle effects so springy animations
 // survive the full re-render that follows every mutation.
@@ -236,6 +237,9 @@ export function renderHome(root, store, { demo } = {}) {
     root.append(h('div', { class: 'cards' },
       pinned.map((t) => (t.type === 'counter' ? counterCard(store, t, today) : habitCard(store, t, today)))));
   }
+
+  const nutritionTile = renderNutritionTile();
+  if (nutritionTile) root.append(nutritionTile);
 
   for (const g of sortedGroups(state)) root.append(groupSection(store, g, today));
 
