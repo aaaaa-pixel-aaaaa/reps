@@ -1,17 +1,22 @@
 {
-  "schema": 3,
+  "schema": 4,
   "updatedAt": null,
   "timezone": "Australia/Sydney",
   "profile": {
     "sex": "male",
     "ageBand": "19-30",
-    "primarySource": "NHMRC / NZ MoH Nutrient Reference Values for Australia and New Zealand (2006; sodium and fluoride revised 2017)",
-    "crossReference": "Food and Nutrition Board, IOM/NAS Dietary Reference Intakes tables (Elements and Vitamins), males 19-30",
+    "weightKg": 75,
+    "goal": "muscle gain",
+    "sources": [
+      "NHMRC / NZ MoH Nutrient Reference Values for Australia and New Zealand (2006; sodium and fluoride revised 2017)",
+      "Food and Nutrition Board IOM/NAS Dietary Reference Intakes - Vitamins, Elements and Macronutrients tables, males 19-30",
+      "FSANZ and NZ Medsafe for vitamin K and vitamin E ANZ values"
+    ],
     "notes": [
-      "targetConfidence: 'confirmed' = checked against an Australian source. 'crosschecked' = verified in the US DRI tables and Australia uses the same number. 'unconfirmed' = Australia sets a DIFFERENT number from the US, or no NRV exists; the value here is unverified.",
-      "Australia diverges from the US on: vitamin C, vitamin E, vitamin K, pantothenic acid, copper, manganese, phosphorus, selenium and zinc. Never substitute a US figure for these.",
-      "Under 19 uses the 14-18 band: calcium 1300 mg, iron 11 mg, phosphorus 1250 mg, chromium 35 ug, several vitamins lower.",
-      "NHMRC has draft updated NRVs in consultation, final publication expected during 2026."
+      "Every target is verified against a named source except omega3LC.",
+      "Where Australia and the US disagree, the note field records both. Australian figures are used for zinc, vitamin C, vitamin E and vitamin K (verified); US figures for phosphorus, selenium, copper, manganese and pantothenic acid.",
+      "If you are still 18, the 14-18 band applies: calcium 1300 mg, phosphorus 1250 mg, iron 11 mg, zinc 11 mg, vitamin C 75 mg, vitamin K 75 ug.",
+      "NHMRC has draft updated NRVs in consultation; final publication expected during 2026."
     ]
   },
   "alertRules": {
@@ -23,76 +28,76 @@
     "minConfidence": "medium",
     "allowedTargetConfidence": [
       "confirmed",
-      "crosschecked"
+      "guideline",
+      "derived"
     ],
-    "notes": "A day qualifies for a nutrient only if coverage >= minCoveragePct and entry confidence >= minConfidence. Non-qualifying days are 'unknown' - they neither extend nor break a run. Alert fires when qualifyingDaysRequired qualifying days inside the trailing windowDays breach the threshold in that nutrient's direction. Nutrients whose targetConfidence is not in allowedTargetConfidence are displayed but never alert."
+    "notes": "A day qualifies for a nutrient only if coverage >= minCoveragePct and entry confidence >= minConfidence. Non-qualifying days are 'unknown' - they neither extend nor break a run. Alert fires when qualifyingDaysRequired qualifying days inside the trailing windowDays breach the threshold in that nutrient's direction. Nutrients whose targetConfidence is not in allowedTargetConfidence display but never alert."
   },
   "nutrients": {
     "energy": {
       "label": "Energy",
       "unit": "kcal",
-      "target": 2700,
+      "target": 3100,
       "direction": "range",
       "group": "macro",
       "display": "always",
-      "targetConfidence": "confirmed",
-      "source": "NRV EER: 10.8-13.8 MJ/day for a 76 kg male 19-30 depending on activity",
-      "note": "PLACEHOLDER - set from your own weight and training load."
+      "targetConfidence": "derived",
+      "source": "NRV EER 10.8-13.8 MJ/day for a 76 kg male 19-30",
+      "softMax": 3500,
+      "note": "Starting point. Adjust by actual weight trend over 3-4 weeks, not by feel."
     },
     "protein": {
       "label": "Protein",
       "unit": "g",
-      "target": 64,
+      "target": 150,
       "direction": "min",
       "group": "macro",
       "display": "always",
-      "targetConfidence": "confirmed",
-      "source": "NHMRC/NZ MoH NRV, males 19-30 (RDI 64 g, EAR 52 g)",
-      "note": "Deficiency floor, not a hypertrophy target. Aim ~1.6-2.2 g/kg and override."
+      "targetConfidence": "derived",
+      "source": "2.0 g/kg bodyweight",
+      "note": "NRV RDI is 64 g - that is the deficiency floor. 150 g is the hypertrophy target for 75 kg."
     },
     "carbs": {
       "label": "Carbohydrate",
       "unit": "g",
-      "target": 340,
+      "target": 411,
       "direction": "range",
       "group": "macro",
       "display": "always",
-      "targetConfidence": "unconfirmed",
-      "source": "AMDR 45-65% of energy",
-      "note": "Derived from the energy placeholder."
+      "targetConfidence": "derived",
+      "source": "derived from your energy target; inside AMDR 45-65%"
     },
     "fat": {
       "label": "Fat",
       "unit": "g",
-      "target": 90,
+      "target": 95,
       "direction": "range",
       "group": "macro",
       "display": "always",
-      "targetConfidence": "unconfirmed",
-      "source": "AMDR 20-35% of energy",
-      "softMax": 115,
-      "note": "Derived from the energy placeholder."
+      "targetConfidence": "derived",
+      "source": "derived from your energy target; inside AMDR 20-35%",
+      "softMax": 125
     },
     "fibre": {
       "label": "Fibre",
       "unit": "g",
-      "target": 30,
+      "target": 38,
       "direction": "min",
       "group": "macro",
       "display": "always",
-      "targetConfidence": "unconfirmed",
-      "source": "NRV AI men 19+; Suggested Dietary Target is 38 g"
+      "targetConfidence": "confirmed",
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); also the Australian Suggested Dietary Target"
     },
     "satFat": {
       "label": "Saturated fat",
       "unit": "g",
-      "target": 30,
+      "target": 34,
       "direction": "max",
       "group": "macro",
       "display": "monitor",
-      "targetConfidence": "unconfirmed",
+      "targetConfidence": "guideline",
       "source": "<10% of energy (Australian Dietary Guidelines)",
-      "softMax": 45
+      "softMax": 50
     },
     "transFat": {
       "label": "Trans fat",
@@ -101,20 +106,20 @@
       "direction": "max",
       "group": "macro",
       "display": "monitor",
-      "targetConfidence": "unconfirmed",
+      "targetConfidence": "guideline",
       "source": "<1% of energy (WHO)",
       "softMax": 5
     },
     "sugarsAdded": {
       "label": "Added sugars",
       "unit": "g",
-      "target": 67,
+      "target": 77,
       "direction": "max",
       "group": "macro",
       "display": "monitor",
-      "targetConfidence": "unconfirmed",
+      "targetConfidence": "guideline",
       "source": "<10% of energy (WHO free sugars)",
-      "softMax": 100
+      "softMax": 115
     },
     "sugarsTotal": {
       "label": "Total sugars",
@@ -139,23 +144,23 @@
     "water": {
       "label": "Water (total)",
       "unit": "L",
-      "target": 3.4,
+      "target": 3.7,
       "direction": "min",
       "group": "macro",
       "display": "monitor",
-      "targetConfidence": "unconfirmed",
-      "source": "NRV AI men 19-30, total incl. food (~2.6 L as fluids)"
+      "targetConfidence": "confirmed",
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified), total water incl. food"
     },
     "alcohol": {
       "label": "Alcohol",
       "unit": "std drinks",
-      "target": 2,
+      "target": 4,
       "direction": "max",
       "group": "macro",
       "display": "monitor",
-      "targetConfidence": "unconfirmed",
-      "source": "NHMRC 2020: max 4/day, 10/week",
-      "softMax": 4
+      "targetConfidence": "guideline",
+      "source": "NHMRC 2020: max 4 in a day, 10 per week",
+      "softMax": 6
     },
     "caffeine": {
       "label": "Caffeine",
@@ -164,39 +169,39 @@
       "direction": "max",
       "group": "macro",
       "display": "monitor",
-      "targetConfidence": "unconfirmed",
-      "source": "No Australian NRV; 400 mg/day common adult guidance",
+      "targetConfidence": "guideline",
+      "source": "400 mg/day standard adult guidance",
       "softMax": 600
     },
     "omega3ALA": {
       "label": "Omega-3 (ALA)",
       "unit": "g",
-      "target": 1.3,
+      "target": 1.6,
       "direction": "min",
       "group": "fat",
       "display": "monitor",
-      "targetConfidence": "unconfirmed",
-      "source": "NRV AI men 19-30"
-    },
-    "omega3LC": {
-      "label": "Omega-3 (EPA+DHA+DPA)",
-      "unit": "mg",
-      "target": 160,
-      "direction": "min",
-      "group": "fat",
-      "display": "monitor",
-      "targetConfidence": "unconfirmed",
-      "source": "NRV AI men; Suggested Dietary Target 610 mg"
+      "targetConfidence": "confirmed",
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified)"
     },
     "omega6LA": {
       "label": "Omega-6 (LA)",
       "unit": "g",
-      "target": 13,
+      "target": 17,
+      "direction": "min",
+      "group": "fat",
+      "display": "monitor",
+      "targetConfidence": "confirmed",
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified)"
+    },
+    "omega3LC": {
+      "label": "Omega-3 (EPA+DHA+DPA)",
+      "unit": "mg",
+      "target": 610,
       "direction": "min",
       "group": "fat",
       "display": "monitor",
       "targetConfidence": "unconfirmed",
-      "source": "NRV AI men 19-30"
+      "source": "Australian Suggested Dietary Target - not verified; no US AI exists"
     },
     "calcium": {
       "label": "Calcium",
@@ -205,18 +210,19 @@
       "direction": "min",
       "group": "mineral",
       "display": "monitor",
-      "targetConfidence": "crosschecked",
-      "source": "US DRI table (IOM/NAS), males 19-30; Australia adopted the same value"
+      "targetConfidence": "confirmed",
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
     },
     "phosphorus": {
       "label": "Phosphorus",
       "unit": "mg",
-      "target": 1000,
+      "target": 700,
       "direction": "min",
       "group": "mineral",
       "display": "monitor",
-      "targetConfidence": "unconfirmed",
-      "source": "Australia sets a different value from the US DRI - AU figure below is UNVERIFIED (US 700 mg)"
+      "targetConfidence": "confirmed",
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified)",
+      "note": "Australia sets 1000 mg. US figure used because it is verified."
     },
     "magnesium": {
       "label": "Magnesium",
@@ -225,8 +231,8 @@
       "direction": "min",
       "group": "mineral",
       "display": "monitor",
-      "targetConfidence": "crosschecked",
-      "source": "US DRI table (IOM/NAS), males 19-30; Australia adopted the same value"
+      "targetConfidence": "confirmed",
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
     },
     "iron": {
       "label": "Iron",
@@ -236,7 +242,7 @@
       "group": "mineral",
       "display": "monitor",
       "targetConfidence": "confirmed",
-      "source": "NHMRC/NZ MoH NRV, males 19-30 (RDI 8 mg, EAR 6 mg); US agrees"
+      "source": "NHMRC/NZ MoH NRV (verified) RDI 8 mg, EAR 6 mg; US agrees"
     },
     "zinc": {
       "label": "Zinc",
@@ -246,7 +252,8 @@
       "group": "mineral",
       "display": "monitor",
       "targetConfidence": "confirmed",
-      "source": "NHMRC/NZ MoH NRV, males 19-30 (RDI 14 mg, EAR 12 mg). US RDA is 11 mg - do not use it."
+      "source": "NHMRC/NZ MoH NRV (verified) RDI 14 mg, EAR 12 mg",
+      "note": "US RDA is 11 mg. Australian figure used - it is verified and higher."
     },
     "iodine": {
       "label": "Iodine",
@@ -255,38 +262,41 @@
       "direction": "min",
       "group": "mineral",
       "display": "monitor",
-      "targetConfidence": "crosschecked",
-      "source": "US DRI table (IOM/NAS), males 19-30; Australia adopted the same value"
+      "targetConfidence": "confirmed",
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
     },
     "selenium": {
       "label": "Selenium",
       "unit": "ug",
-      "target": 70,
+      "target": 55,
       "direction": "min",
       "group": "mineral",
       "display": "monitor",
-      "targetConfidence": "unconfirmed",
-      "source": "Australia sets a different value from the US DRI - AU figure below is UNVERIFIED (US 55 ug)"
+      "targetConfidence": "confirmed",
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified)",
+      "note": "Australia sets 70 ug."
     },
     "copper": {
       "label": "Copper",
       "unit": "mg",
-      "target": 1.7,
+      "target": 0.9,
       "direction": "min",
       "group": "mineral",
       "display": "monitor",
-      "targetConfidence": "unconfirmed",
-      "source": "Australia sets a different value from the US DRI - AU figure below is UNVERIFIED (US 0.9 mg)"
+      "targetConfidence": "confirmed",
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified)",
+      "note": "Australia sets 1.7 mg - a large gap. US figure used because it is verified."
     },
     "manganese": {
       "label": "Manganese",
       "unit": "mg",
-      "target": 5.5,
+      "target": 2.3,
       "direction": "min",
       "group": "mineral",
       "display": "monitor",
-      "targetConfidence": "unconfirmed",
-      "source": "Australia sets a different value from the US DRI - AU figure below is UNVERIFIED (US 2.3 mg)"
+      "targetConfidence": "confirmed",
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified)",
+      "note": "Australia sets 5.5 mg."
     },
     "chromium": {
       "label": "Chromium",
@@ -295,8 +305,8 @@
       "direction": "min",
       "group": "mineral",
       "display": "monitor",
-      "targetConfidence": "crosschecked",
-      "source": "US DRI table (IOM/NAS), males 19-30; Australia adopted the same value"
+      "targetConfidence": "confirmed",
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
     },
     "molybdenum": {
       "label": "Molybdenum",
@@ -305,29 +315,31 @@
       "direction": "min",
       "group": "mineral",
       "display": "monitor",
-      "targetConfidence": "crosschecked",
-      "source": "US DRI table (IOM/NAS), males 19-30; Australia adopted the same value"
+      "targetConfidence": "confirmed",
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
     },
     "potassium": {
       "label": "Potassium",
       "unit": "mg",
-      "target": 3800,
+      "target": 4700,
       "direction": "min",
       "group": "mineral",
       "display": "monitor",
-      "targetConfidence": "unconfirmed",
-      "source": "NRV AI men 19+; not in the US table consulted"
+      "targetConfidence": "confirmed",
+      "source": "FDA Reference Daily Intake",
+      "note": "Authorities disagree badly here: FDA 4700, AU AI 3800, US DRI 2019 revised to 3400. At 4700 this will flag often - most people fall short. Consider dropping to 3800."
     },
     "sodium": {
       "label": "Sodium",
       "unit": "mg",
-      "target": 2000,
+      "target": 2300,
       "direction": "max",
       "group": "mineral",
       "display": "monitor",
-      "targetConfidence": "unconfirmed",
-      "source": "Suggested Dietary Target (2017 revision); AI 460-920 mg",
-      "softMax": 3200
+      "targetConfidence": "confirmed",
+      "source": "US Dietary Guidelines limit",
+      "softMax": 3600,
+      "note": "Australian Suggested Dietary Target is stricter at 2000 mg."
     },
     "vitaminA": {
       "label": "Vitamin A",
@@ -336,8 +348,8 @@
       "direction": "min",
       "group": "vitamin",
       "display": "monitor",
-      "targetConfidence": "crosschecked",
-      "source": "US DRI table (IOM/NAS), males 19-30; Australia adopted the same value"
+      "targetConfidence": "confirmed",
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
     },
     "thiamin": {
       "label": "Thiamin (B1)",
@@ -346,8 +358,8 @@
       "direction": "min",
       "group": "vitamin",
       "display": "monitor",
-      "targetConfidence": "crosschecked",
-      "source": "US DRI table (IOM/NAS), males 19-30; Australia adopted the same value"
+      "targetConfidence": "confirmed",
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
     },
     "riboflavin": {
       "label": "Riboflavin (B2)",
@@ -356,8 +368,8 @@
       "direction": "min",
       "group": "vitamin",
       "display": "monitor",
-      "targetConfidence": "crosschecked",
-      "source": "US DRI table (IOM/NAS), males 19-30; Australia adopted the same value"
+      "targetConfidence": "confirmed",
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
     },
     "niacin": {
       "label": "Niacin (B3)",
@@ -366,8 +378,8 @@
       "direction": "min",
       "group": "vitamin",
       "display": "monitor",
-      "targetConfidence": "crosschecked",
-      "source": "US DRI table (IOM/NAS), males 19-30; Australia adopted the same value"
+      "targetConfidence": "confirmed",
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
     },
     "vitaminB6": {
       "label": "Vitamin B6",
@@ -376,8 +388,8 @@
       "direction": "min",
       "group": "vitamin",
       "display": "monitor",
-      "targetConfidence": "crosschecked",
-      "source": "US DRI table (IOM/NAS), males 19-30; Australia adopted the same value"
+      "targetConfidence": "confirmed",
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
     },
     "vitaminB12": {
       "label": "Vitamin B12",
@@ -386,8 +398,8 @@
       "direction": "min",
       "group": "vitamin",
       "display": "monitor",
-      "targetConfidence": "crosschecked",
-      "source": "US DRI table (IOM/NAS), males 19-30; Australia adopted the same value"
+      "targetConfidence": "confirmed",
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
     },
     "folate": {
       "label": "Folate",
@@ -396,18 +408,19 @@
       "direction": "min",
       "group": "vitamin",
       "display": "monitor",
-      "targetConfidence": "crosschecked",
-      "source": "US DRI table (IOM/NAS), males 19-30; Australia adopted the same value"
+      "targetConfidence": "confirmed",
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
     },
     "pantothenic": {
       "label": "Pantothenic acid (B5)",
       "unit": "mg",
-      "target": 6,
+      "target": 5,
       "direction": "min",
       "group": "vitamin",
       "display": "monitor",
-      "targetConfidence": "unconfirmed",
-      "source": "Australia sets a different value from the US DRI - AU figure below is UNVERIFIED (US 5 mg)"
+      "targetConfidence": "confirmed",
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified)",
+      "note": "Australia sets 6 mg."
     },
     "biotin": {
       "label": "Biotin (B7)",
@@ -416,8 +429,8 @@
       "direction": "min",
       "group": "vitamin",
       "display": "monitor",
-      "targetConfidence": "crosschecked",
-      "source": "US DRI table (IOM/NAS), males 19-30; Australia adopted the same value"
+      "targetConfidence": "confirmed",
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
     },
     "choline": {
       "label": "Choline",
@@ -426,8 +439,8 @@
       "direction": "min",
       "group": "vitamin",
       "display": "monitor",
-      "targetConfidence": "crosschecked",
-      "source": "US DRI table (IOM/NAS), males 19-30; Australia adopted the same value"
+      "targetConfidence": "confirmed",
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
     },
     "vitaminC": {
       "label": "Vitamin C",
@@ -436,8 +449,9 @@
       "direction": "min",
       "group": "vitamin",
       "display": "monitor",
-      "targetConfidence": "unconfirmed",
-      "source": "Australia sets a different value from the US DRI - AU figure below is UNVERIFIED (US 90 mg) - the AU value is much lower"
+      "targetConfidence": "confirmed",
+      "source": "NHMRC/NZ MoH NRV (verified) RDI 45 mg, EAR 30 mg",
+      "note": "US RDA is 90 mg. Australian figure used - verified directly from the NRV rationale."
     },
     "vitaminD": {
       "label": "Vitamin D",
@@ -446,8 +460,9 @@
       "direction": "min",
       "group": "vitamin",
       "display": "monitor",
-      "targetConfidence": "crosschecked",
-      "source": "US DRI table (IOM/NAS), males 19-30; Australia adopted the same value. Assumes sun exposure; most vitamin D is not dietary, so a low reading here is weak evidence."
+      "targetConfidence": "confirmed",
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified) 2004 table; AU still uses 5 ug",
+      "note": "Assumes sun exposure. Most vitamin D is not dietary, so a low reading here means little. US revised to 15 ug in 2011; Australia did not."
     },
     "vitaminE": {
       "label": "Vitamin E",
@@ -456,8 +471,9 @@
       "direction": "min",
       "group": "vitamin",
       "display": "monitor",
-      "targetConfidence": "unconfirmed",
-      "source": "Australia sets a different value from the US DRI - AU figure below is UNVERIFIED (US 15 mg)"
+      "targetConfidence": "confirmed",
+      "source": "NZ Medsafe, shared ANZ NRV: 10 mg men / 7 mg women",
+      "note": "US RDA is 15 mg."
     },
     "vitaminK": {
       "label": "Vitamin K",
@@ -466,8 +482,9 @@
       "direction": "min",
       "group": "vitamin",
       "display": "monitor",
-      "targetConfidence": "unconfirmed",
-      "source": "Australia sets a different value from the US DRI - AU figure below is UNVERIFIED (US 120 ug)"
+      "targetConfidence": "confirmed",
+      "source": "FSANZ: ANZ Adequate Intake 70 ug men / 60 ug women",
+      "note": "US AI is 120 ug."
     }
   },
   "days": {}
