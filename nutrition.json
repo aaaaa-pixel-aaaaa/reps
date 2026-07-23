@@ -1,5 +1,5 @@
 {
-  "schema": 4,
+  "schema": 5,
   "updatedAt": "2026-07-23T19:15:00+10:00",
   "timezone": "Australia/Sydney",
   "profile": {
@@ -16,7 +16,8 @@
       "Every target is verified against a named source except omega3LC.",
       "Where Australia and the US disagree, the note field records both. Australian figures are used for zinc, vitamin C, vitamin E and vitamin K (verified); US figures for phosphorus, selenium, copper, manganese and pantothenic acid.",
       "If you are still 18, the 14-18 band applies: calcium 1300 mg, phosphorus 1250 mg, iron 11 mg, zinc 11 mg, vitamin C 75 mg, vitamin K 75 ug.",
-      "NHMRC has draft updated NRVs in consultation; final publication expected during 2026."
+      "NHMRC has draft updated NRVs in consultation; final publication expected during 2026.",
+      "targetMin/targetMax are only present where a published range exists (currently the AMDR for carbs and fat). Never invent a band by scaling the target - absence of a bound is information."
     ]
   },
   "alertRules": {
@@ -31,7 +32,7 @@
       "guideline",
       "derived"
     ],
-    "notes": "A day qualifies for a nutrient only if coverage >= minCoveragePct and entry confidence >= minConfidence. Non-qualifying days are 'unknown' - they neither extend nor break a run. Alert fires when qualifyingDaysRequired qualifying days inside the trailing windowDays breach the threshold in that nutrient's direction. Nutrients whose targetConfidence is not in allowedTargetConfidence display but never alert."
+    "notes": "A day qualifies for a nutrient only if coverage >= minCoveragePct and entry confidence >= minConfidence. Non-qualifying days are 'unknown' - they neither extend nor break a run. Alert fires when qualifyingDaysRequired qualifying days inside the trailing windowDays breach the threshold in that nutrient's direction. Nutrients whose targetConfidence is not in allowedTargetConfidence display but never alert. Nutrients may carry targetMin and targetMax defining an acceptable band. Where both exist, breaching below targetMin or above targetMax counts toward a streak; inside the band is satisfied. A null targetMin means no meaningful lower bound exists."
   },
   "nutrients": {
     "energy": {
@@ -44,7 +45,8 @@
       "targetConfidence": "derived",
       "source": "NRV EER 10.8-13.8 MJ/day for a 76 kg male 19-30",
       "softMax": 3500,
-      "note": "Starting point. Adjust by actual weight trend over 3-4 weeks, not by feel."
+      "note": "Starting point. Adjust by actual weight trend over 3-4 weeks, not by feel. No lower bound set: any figure would be invented. Adjust the target itself off your weight trend.",
+      "targetMin": null
     },
     "protein": {
       "label": "Protein",
@@ -65,7 +67,9 @@
       "group": "macro",
       "display": "always",
       "targetConfidence": "derived",
-      "source": "derived from your energy target; inside AMDR 45-65%"
+      "source": "AMDR 45-65% of energy (US DRI macronutrient table, verified); bounds derived from your 3100 kcal target",
+      "targetMin": 349,
+      "targetMax": 504
     },
     "fat": {
       "label": "Fat",
@@ -75,8 +79,10 @@
       "group": "macro",
       "display": "always",
       "targetConfidence": "derived",
-      "source": "derived from your energy target; inside AMDR 20-35%",
-      "softMax": 125
+      "source": "AMDR 20-35% of energy (US DRI macronutrient table, verified); bounds derived from your 3100 kcal target",
+      "softMax": 125,
+      "targetMin": 69,
+      "targetMax": 121
     },
     "fibre": {
       "label": "Fibre",
