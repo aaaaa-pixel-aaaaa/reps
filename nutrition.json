@@ -1,5 +1,5 @@
 {
-  "schema": 5,
+  "schema": 6,
   "updatedAt": "2026-07-23T19:15:00+10:00",
   "timezone": "Australia/Sydney",
   "profile": {
@@ -17,7 +17,8 @@
       "Where Australia and the US disagree, the note field records both. Australian figures are used for zinc, vitamin C, vitamin E and vitamin K (verified); US figures for phosphorus, selenium, copper, manganese and pantothenic acid.",
       "If you are still 18, the 14-18 band applies: calcium 1300 mg, phosphorus 1250 mg, iron 11 mg, zinc 11 mg, vitamin C 75 mg, vitamin K 75 ug.",
       "NHMRC has draft updated NRVs in consultation; final publication expected during 2026.",
-      "targetMin/targetMax are only present where a published range exists (currently the AMDR for carbs and fat). Never invent a band by scaling the target - absence of a bound is information."
+      "targetMin/targetMax are only present where a published range exists (currently the AMDR for carbs and fat). Never invent a band by scaling the target - absence of a bound is information.",
+      "upperLimit added for 16 nutrients. All are 2.2x their target or higher, so diet alone will not approach them - they matter only if supplements are introduced."
     ]
   },
   "alertRules": {
@@ -32,7 +33,8 @@
       "guideline",
       "derived"
     ],
-    "notes": "A day qualifies for a nutrient only if coverage >= minCoveragePct and entry confidence >= minConfidence. Non-qualifying days are 'unknown' - they neither extend nor break a run. Alert fires when qualifyingDaysRequired qualifying days inside the trailing windowDays breach the threshold in that nutrient's direction. Nutrients whose targetConfidence is not in allowedTargetConfidence display but never alert. Nutrients may carry targetMin and targetMax defining an acceptable band. Where both exist, breaching below targetMin or above targetMax counts toward a streak; inside the band is satisfied. A null targetMin means no meaningful lower bound exists."
+    "notes": "A day qualifies for a nutrient only if coverage >= minCoveragePct and entry confidence >= minConfidence. Non-qualifying days are 'unknown' - they neither extend nor break a run. Alert fires when qualifyingDaysRequired qualifying days inside the trailing windowDays breach the threshold in that nutrient's direction. Nutrients whose targetConfidence is not in allowedTargetConfidence display but never alert. Nutrients may carry targetMin and targetMax defining an acceptable band. Where both exist, breaching below targetMin or above targetMax counts toward a streak; inside the band is satisfied. A null targetMin means no meaningful lower bound exists.",
+    "upperLimitRule": "upperLimit is the Tolerable Upper Intake Level - a safety ceiling, distinct from targetMax which is a dietary band. Breaching it fires immediately on a single qualifying day; it does not use the streak window. A null upperLimit means no ceiling exists and none must be inferred."
   },
   "nutrients": {
     "energy": {
@@ -217,7 +219,9 @@
       "group": "mineral",
       "display": "monitor",
       "targetConfidence": "confirmed",
-      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees",
+      "upperLimit": 2500,
+      "upperLimitSource": "US DRI Tolerable Upper Intake Levels, Elements table (IOM/NAS), 19-70y (verified)"
     },
     "phosphorus": {
       "label": "Phosphorus",
@@ -228,7 +232,9 @@
       "display": "monitor",
       "targetConfidence": "confirmed",
       "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified)",
-      "note": "Australia sets 1000 mg. US figure used because it is verified."
+      "note": "Australia sets 1000 mg. US figure used because it is verified.",
+      "upperLimit": 4000,
+      "upperLimitSource": "US DRI Tolerable Upper Intake Levels, Elements table (IOM/NAS), 19-70y (verified)"
     },
     "magnesium": {
       "label": "Magnesium",
@@ -238,7 +244,9 @@
       "group": "mineral",
       "display": "monitor",
       "targetConfidence": "confirmed",
-      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees",
+      "upperLimit": null,
+      "upperLimitNote": "US UL is 350 mg but applies to magnesium from supplements ONLY, not food. That is below the 400 mg food target, so it cannot be used as a ceiling. Deliberately null."
     },
     "iron": {
       "label": "Iron",
@@ -248,7 +256,9 @@
       "group": "mineral",
       "display": "monitor",
       "targetConfidence": "confirmed",
-      "source": "NHMRC/NZ MoH NRV (verified) RDI 8 mg, EAR 6 mg; US agrees"
+      "source": "NHMRC/NZ MoH NRV (verified) RDI 8 mg, EAR 6 mg; US agrees",
+      "upperLimit": 45,
+      "upperLimitSource": "US DRI Tolerable Upper Intake Levels, Elements table (IOM/NAS), 19-70y (verified)"
     },
     "zinc": {
       "label": "Zinc",
@@ -259,7 +269,10 @@
       "display": "monitor",
       "targetConfidence": "confirmed",
       "source": "NHMRC/NZ MoH NRV (verified) RDI 14 mg, EAR 12 mg",
-      "note": "US RDA is 11 mg. Australian figure used - it is verified and higher."
+      "note": "US RDA is 11 mg. Australian figure used - it is verified and higher.",
+      "upperLimit": 40,
+      "upperLimitSource": "US DRI Tolerable Upper Intake Levels, Elements table (IOM/NAS), 19-70y (verified)",
+      "upperLimitNote": "Closest ceiling to its target of any nutrient here (2.9x). A zinc supplement on top of a high-meat diet is the realistic way to approach it."
     },
     "iodine": {
       "label": "Iodine",
@@ -269,7 +282,9 @@
       "group": "mineral",
       "display": "monitor",
       "targetConfidence": "confirmed",
-      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees",
+      "upperLimit": 1100,
+      "upperLimitSource": "US DRI Tolerable Upper Intake Levels, Elements table (IOM/NAS), 19-70y (verified)"
     },
     "selenium": {
       "label": "Selenium",
@@ -280,7 +295,9 @@
       "display": "monitor",
       "targetConfidence": "confirmed",
       "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified)",
-      "note": "Australia sets 70 ug."
+      "note": "Australia sets 70 ug.",
+      "upperLimit": 400,
+      "upperLimitSource": "US DRI Tolerable Upper Intake Levels, Elements table (IOM/NAS), 19-70y (verified)"
     },
     "copper": {
       "label": "Copper",
@@ -291,7 +308,9 @@
       "display": "monitor",
       "targetConfidence": "confirmed",
       "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified)",
-      "note": "Australia sets 1.7 mg - a large gap. US figure used because it is verified."
+      "note": "Australia sets 1.7 mg - a large gap. US figure used because it is verified.",
+      "upperLimit": 10,
+      "upperLimitSource": "US DRI Tolerable Upper Intake Levels, Elements table (IOM/NAS), 19-70y (verified)"
     },
     "manganese": {
       "label": "Manganese",
@@ -302,7 +321,9 @@
       "display": "monitor",
       "targetConfidence": "confirmed",
       "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified)",
-      "note": "Australia sets 5.5 mg."
+      "note": "Australia sets 5.5 mg.",
+      "upperLimit": 11,
+      "upperLimitSource": "US DRI Tolerable Upper Intake Levels, Elements table (IOM/NAS), 19-70y (verified)"
     },
     "chromium": {
       "label": "Chromium",
@@ -312,7 +333,9 @@
       "group": "mineral",
       "display": "monitor",
       "targetConfidence": "confirmed",
-      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees",
+      "upperLimit": null,
+      "upperLimitNote": "No UL established (not determinable from available data). Absence is a finding, not a gap."
     },
     "molybdenum": {
       "label": "Molybdenum",
@@ -322,7 +345,9 @@
       "group": "mineral",
       "display": "monitor",
       "targetConfidence": "confirmed",
-      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees",
+      "upperLimit": 2000,
+      "upperLimitSource": "US DRI Tolerable Upper Intake Levels, Elements table (IOM/NAS), 19-70y (verified)"
     },
     "potassium": {
       "label": "Potassium",
@@ -333,7 +358,9 @@
       "display": "monitor",
       "targetConfidence": "confirmed",
       "source": "FDA Reference Daily Intake",
-      "note": "Authorities disagree badly here: FDA 4700, AU AI 3800, US DRI 2019 revised to 3400. At 4700 this will flag often - most people fall short. Consider dropping to 3800."
+      "note": "Authorities disagree badly here: FDA 4700, AU AI 3800, US DRI 2019 revised to 3400. At 4700 this will flag often - most people fall short. Consider dropping to 3800.",
+      "upperLimit": null,
+      "upperLimitNote": "No UL established (not determinable from available data). Absence is a finding, not a gap."
     },
     "sodium": {
       "label": "Sodium",
@@ -355,7 +382,10 @@
       "group": "vitamin",
       "display": "monitor",
       "targetConfidence": "confirmed",
-      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees",
+      "upperLimit": 3000,
+      "upperLimitSource": "US DRI Tolerable Upper Intake Levels, Vitamins (IOM/NAS), adults (verified)",
+      "upperLimitNote": "Preformed vitamin A only. Beta-carotene from food is not subject to this."
     },
     "thiamin": {
       "label": "Thiamin (B1)",
@@ -365,7 +395,9 @@
       "group": "vitamin",
       "display": "monitor",
       "targetConfidence": "confirmed",
-      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees",
+      "upperLimit": null,
+      "upperLimitNote": "No UL established (not determinable from available data). Absence is a finding, not a gap."
     },
     "riboflavin": {
       "label": "Riboflavin (B2)",
@@ -375,7 +407,9 @@
       "group": "vitamin",
       "display": "monitor",
       "targetConfidence": "confirmed",
-      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees",
+      "upperLimit": null,
+      "upperLimitNote": "No UL established (not determinable from available data). Absence is a finding, not a gap."
     },
     "niacin": {
       "label": "Niacin (B3)",
@@ -385,7 +419,10 @@
       "group": "vitamin",
       "display": "monitor",
       "targetConfidence": "confirmed",
-      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees",
+      "upperLimit": 35,
+      "upperLimitSource": "US DRI Tolerable Upper Intake Levels, Vitamins (IOM/NAS), adults (verified)",
+      "upperLimitNote": "Applies to nicotinic acid from supplements and fortified food, not niacin occurring in food."
     },
     "vitaminB6": {
       "label": "Vitamin B6",
@@ -395,7 +432,10 @@
       "group": "vitamin",
       "display": "monitor",
       "targetConfidence": "confirmed",
-      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees",
+      "upperLimit": 100,
+      "upperLimitSource": "US DRI Tolerable Upper Intake Levels, Vitamins (IOM/NAS), adults (verified)",
+      "upperLimitNote": "US figure. Australia sets 50 mg and EFSA revised to 12 mg in 2023 - wide disagreement, treat as soft."
     },
     "vitaminB12": {
       "label": "Vitamin B12",
@@ -405,7 +445,9 @@
       "group": "vitamin",
       "display": "monitor",
       "targetConfidence": "confirmed",
-      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees",
+      "upperLimit": null,
+      "upperLimitNote": "No UL established (not determinable from available data). Absence is a finding, not a gap."
     },
     "folate": {
       "label": "Folate",
@@ -415,7 +457,10 @@
       "group": "vitamin",
       "display": "monitor",
       "targetConfidence": "confirmed",
-      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees",
+      "upperLimit": 1000,
+      "upperLimitSource": "US DRI Tolerable Upper Intake Levels, Vitamins (IOM/NAS), adults (verified)",
+      "upperLimitNote": "Applies to folic acid from supplements and fortified food, not food folate."
     },
     "pantothenic": {
       "label": "Pantothenic acid (B5)",
@@ -426,7 +471,9 @@
       "display": "monitor",
       "targetConfidence": "confirmed",
       "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified)",
-      "note": "Australia sets 6 mg."
+      "note": "Australia sets 6 mg.",
+      "upperLimit": null,
+      "upperLimitNote": "No UL established (not determinable from available data). Absence is a finding, not a gap."
     },
     "biotin": {
       "label": "Biotin (B7)",
@@ -436,7 +483,9 @@
       "group": "vitamin",
       "display": "monitor",
       "targetConfidence": "confirmed",
-      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees",
+      "upperLimit": null,
+      "upperLimitNote": "No UL established (not determinable from available data). Absence is a finding, not a gap."
     },
     "choline": {
       "label": "Choline",
@@ -446,7 +495,9 @@
       "group": "vitamin",
       "display": "monitor",
       "targetConfidence": "confirmed",
-      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees"
+      "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified); AU agrees",
+      "upperLimit": null,
+      "upperLimitNote": "A UL exists but was not verified in this pass. Left null rather than guessed."
     },
     "vitaminC": {
       "label": "Vitamin C",
@@ -457,7 +508,10 @@
       "display": "monitor",
       "targetConfidence": "confirmed",
       "source": "NHMRC/NZ MoH NRV (verified) RDI 45 mg, EAR 30 mg",
-      "note": "US RDA is 90 mg. Australian figure used - verified directly from the NRV rationale."
+      "note": "US RDA is 90 mg. Australian figure used - verified directly from the NRV rationale.",
+      "upperLimit": 2000,
+      "upperLimitSource": "US DRI Tolerable Upper Intake Levels, Vitamins (IOM/NAS), adults (verified)",
+      "upperLimitNote": "US UL. Australia sets no UL for vitamin C but names 1000 mg/day as a prudent limit - the stricter figure."
     },
     "vitaminD": {
       "label": "Vitamin D",
@@ -468,7 +522,10 @@
       "display": "monitor",
       "targetConfidence": "confirmed",
       "source": "US DRI, Food and Nutrition Board IOM/NAS, males 19-30 (verified) 2004 table; AU still uses 5 ug",
-      "note": "Assumes sun exposure. Most vitamin D is not dietary, so a low reading here means little. US revised to 15 ug in 2011; Australia did not."
+      "note": "Assumes sun exposure. Most vitamin D is not dietary, so a low reading here means little. US revised to 15 ug in 2011; Australia did not.",
+      "upperLimit": 50,
+      "upperLimitSource": "US DRI Tolerable Upper Intake Levels, Vitamins (IOM/NAS), adults (verified)",
+      "upperLimitNote": "1997/2000 IOM figure. The 2011 US review raised this to 100 ug; Australia did not follow. Lower value kept."
     },
     "vitaminE": {
       "label": "Vitamin E",
@@ -479,7 +536,10 @@
       "display": "monitor",
       "targetConfidence": "confirmed",
       "source": "NZ Medsafe, shared ANZ NRV: 10 mg men / 7 mg women",
-      "note": "US RDA is 15 mg."
+      "note": "US RDA is 15 mg.",
+      "upperLimit": 1000,
+      "upperLimitSource": "US DRI Tolerable Upper Intake Levels, Vitamins (IOM/NAS), adults (verified)",
+      "upperLimitNote": "Applies to supplemental alpha-tocopherol, not food."
     },
     "vitaminK": {
       "label": "Vitamin K",
@@ -490,7 +550,9 @@
       "display": "monitor",
       "targetConfidence": "confirmed",
       "source": "FSANZ: ANZ Adequate Intake 70 ug men / 60 ug women",
-      "note": "US AI is 120 ug."
+      "note": "US AI is 120 ug.",
+      "upperLimit": null,
+      "upperLimitNote": "No UL established (not determinable from available data). Absence is a finding, not a gap."
     }
   },
   "days": {
