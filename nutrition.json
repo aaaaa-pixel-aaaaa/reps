@@ -1,6 +1,6 @@
 {
   "schema": 6,
-  "updatedAt": "2026-07-25T00:00:00+10:00",
+  "updatedAt": "2026-07-24T00:00:00+10:00",
   "timezone": "Australia/Sydney",
   "profile": {
     "sex": "male",
@@ -898,7 +898,7 @@
         "vitaminC": 9
       }
     },
-    "2026-07-25": {
+    "2026-07-24": {
       "entries": [
         {
           "item": "Scrambled eggs (4 large)",
