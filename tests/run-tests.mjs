@@ -14,7 +14,8 @@ import { pinnedTrackers, groupTrackers, reorderContext } from '../js/model.js';
 import { wrapDelta, stepsFor, angleAt } from '../js/wheel.js';
 import {
   nutrientCurrent, nutrientCoverage, dayEntries, alwaysNutrients, groupedNutrients,
-  nutrientHue, barFill, dayQualifies, computeAlerts, summarizeAlerts,
+  nutrientHue, dayQualifies, computeAlerts, computeUpperLimitAlerts, computeAllAlerts,
+  summarizeAlerts, directionGlyph, nutrientRailMax, nutrientBand, nutrientBarModel,
   nutrientHit, nutrientDayStatus, allGoalsHit, nutritionCurrentStreak,
   nutritionLongestStreak, nutritionStats,
 } from '../js/nutrition.js';
@@ -624,34 +625,103 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
   ok(h >= 0 && h < 360, 'hue is a valid degree value');
 }
 
-// -- bar fill math --
+// -- direction glyphs --
+{
+  eq(directionGlyph('min'), '↑', 'min glyph');
+  eq(directionGlyph('max'), '↓', 'max glyph');
+  eq(directionGlyph('range'), '↕', 'range glyph');
+  eq(directionGlyph('none'), '', 'none has no glyph');
+}
+
+// -- schema v6: rail scale --
+{
+  const round2 = (x) => Math.round(x * 100) / 100;
+
+  const minDef = { target: 150, direction: 'min' }; // e.g. protein: no upperLimit
+  eq(round2(nutrientRailMax(minDef, null)), 176.47, 'min, no current: railMax is target/0.85');
+  eq(round2(nutrientRailMax(minDef, 75)), 176.47, 'min, current under baseline rail: rail unaffected');
+  eq(round2(nutrientRailMax(minDef, 300)), round2(300 / 0.95), 'min, current overflows baseline rail: rail widens to fit it');
+
+  const maxDef = { target: 34, direction: 'max', softMax: 50 }; // e.g. saturated fat
+  eq(round2(nutrientRailMax(maxDef, null)), round2(50 / 0.85), 'max: railMax is softMax/0.85, not target/0.85');
+
+  const rangeNoSoftMax = { target: 411, direction: 'range', targetMax: 504 }; // carbs: real AMDR band, no softMax
+  eq(round2(nutrientRailMax(rangeNoSoftMax, null)), round2(504 / 0.85), 'range: railMax uses targetMax when there is no softMax');
+
+  const rangeWithSoftMax = { target: 95, direction: 'range', targetMax: 121, softMax: 125 }; // fat: both exist
+  eq(round2(nutrientRailMax(rangeWithSoftMax, null)), round2(125 / 0.85), 'range: softMax outranks targetMax for the rail');
+
+  const ulDef = { target: 1000, direction: 'min', upperLimit: 2500 }; // e.g. calcium
+  eq(round2(nutrientRailMax(ulDef, 1200)), round2(1200 / 0.95),
+    'min w/ UL, current below the 60% proximity threshold: rail only widens to fit current');
+  eq(round2(nutrientRailMax(ulDef, 1600)), round2(2500 / 0.9),
+    'min w/ UL, current at/above 60% of the UL: rail tightens around the UL');
+  eq(round2(nutrientRailMax(ulDef, 3000)), round2(3000 / 0.95),
+    'min w/ UL, current overflows even the UL-based rail: rail widens again to fit it');
+}
+
+// -- schema v6: the satisfied band --
 {
   const minDef = { target: 150, direction: 'min' };
-  eq(barFill(minDef, null).unknown, true, 'no value: unknown');
-  eq(barFill(minDef, null).widthPct, 0, 'unknown: zero width');
-  eq(barFill(minDef, 75).widthPct, 50, 'min, half of target: half width');
-  eq(barFill(minDef, 75).chromaT, 0.5, 'chroma tracks width below target');
-  eq(barFill(minDef, 300).widthPct, 100, 'min, double target: width holds at 100%');
-  eq(barFill(minDef, 300).overshootT, 0, 'exceeding a minimum never reddens');
-  eq(barFill(minDef, 300).showMarker, false, 'a minimum has no boundary marker');
+  eq(nutrientBand(minDef, 176.47), { start: 150, end: 176.47, hard: false }, 'min, no UL: band runs to the rail edge, soft');
 
-  const maxDef = { target: 2300, direction: 'max', softMax: 3600 };
-  eq(barFill(maxDef, 1150).widthPct, 50, 'max, half of target: half width, same as min');
-  eq(barFill(maxDef, 1150).overshootT, 0, 'under the limit: no red yet');
-  eq(barFill(maxDef, 2300).widthPct, 100, 'max, exactly at target: full width');
-  eq(barFill(maxDef, 2300).overshootT, 0, 'exactly at the limit: not yet overshooting');
-  eq(barFill(maxDef, 2950).widthPct, 100, 'max, past target: width holds at 100%, does not keep growing');
-  eq(Math.round(barFill(maxDef, 2950).overshootT * 100), 50, 'halfway from target to softMax: half reddened');
-  eq(barFill(maxDef, 3600).overshootT, 1, 'at softMax: fully reddened');
-  eq(barFill(maxDef, 5000).overshootT, 1, 'past softMax: stays capped, does not overflow past 1');
-  eq(barFill(maxDef, 1150).showMarker, true, 'max/range nutrients get a boundary marker');
+  const ulDef = { target: 1000, direction: 'min', upperLimit: 2500 };
+  eq(nutrientBand(ulDef, 2777.78), { start: 1000, end: 2500, hard: true }, 'min w/ UL: band ends at the UL itself, marked hard');
 
-  const rangeNoSoftMax = { target: 411, direction: 'range' }; // e.g. carbs in the real feed
-  eq(barFill(rangeNoSoftMax, 500).overshootT, 1, 'no softMax defined: any exceedance reads as fully red');
+  const maxDef = { target: 34, direction: 'max', softMax: 50 };
+  eq(nutrientBand(maxDef, 58.82), { start: 0, end: 34, hard: false }, 'max: band is [0, target]');
+
+  const carbs = { target: 411, direction: 'range', targetMin: 349, targetMax: 504 };
+  eq(nutrientBand(carbs, 592.94), { start: 349, end: 504, hard: false }, 'range with a real AMDR band: uses targetMin/targetMax as-is');
+
+  // Energy: targetMin is null and there's no targetMax, only a softMax — the
+  // literal targetMax??target formula would collapse the band to a single
+  // point at target, so softMax fills in as the band's end (see the comment
+  // on nutrientBand in js/nutrition.js for the worked-through reasoning).
+  const energy = { target: 3100, direction: 'range', targetMin: null, softMax: 3500 };
+  eq(nutrientBand(energy, 4117.65), { start: 3100, end: 3500, hard: false }, 'energy: band runs target to softMax, not a single point');
 
   const noneDef = { target: null, direction: 'none' };
-  eq(barFill(noneDef, 120).widthPct, 0, 'no target at all: no bar to fill');
-  eq(barFill(noneDef, 120).unknown, false, 'a real value with no target is still known, just not barred');
+  eq(nutrientBand(noneDef, null), null, 'direction none: no band');
+}
+
+// -- schema v6: the full bar model (fill/colour, unknown, overshoot) --
+{
+  const minDef = { target: 150, direction: 'min' };
+  const unk = nutrientBarModel(minDef, null);
+  eq(unk.unknown, true, 'no value: unknown');
+  eq(unk.fillFrac, 0, 'unknown: zero fill');
+  ok(unk.band != null, 'unknown still carries a band for context (drawn, just with no fill)');
+
+  eq(nutrientBarModel(minDef, 0).chromaT, 0.15, 'min, zero intake: chroma floors at 0.15, never true grey');
+  eq(nutrientBarModel(minDef, 75).chromaT, 0.575, 'min, halfway to target: chroma ramps between the 0.15 floor and 1.0');
+  eq(nutrientBarModel(minDef, 150).chromaT, 1, 'min, at target (band start): full chroma');
+  eq(nutrientBarModel(minDef, 300).chromaT, 1, 'min, past target: stays at full chroma');
+  eq(nutrientBarModel(minDef, 300).overshootT, 0, 'min w/ no upperLimit: exceeding a floor never reddens, no matter how far');
+  ok(nutrientBarModel(minDef, 75).fillFrac < 1, 'min, under target: fill has not reached the rail edge');
+
+  const maxDef = { target: 34, direction: 'max', softMax: 50 };
+  eq(nutrientBarModel(maxDef, 0).chromaT, 1, 'max: band starts at 0, so even zero intake reads as "inside the satisfied zone"');
+  eq(nutrientBarModel(maxDef, 20).overshootT, 0, 'max, under target: no reddening yet');
+  eq(nutrientBarModel(maxDef, 42).overshootT, 0.5, 'max, halfway from target to softMax: half reddened');
+  eq(nutrientBarModel(maxDef, 50).overshootT, 1, 'max, at softMax: fully reddened');
+  eq(nutrientBarModel(maxDef, 90).overshootT, 1, 'max, past softMax: stays capped');
+
+  const rangeNoSoftMax = { target: 411, direction: 'range', targetMax: 504 }; // carbs
+  const rp = 504 * 1.25; // no softMax and no upperLimit: red point falls back to 1.25x the band end
+  eq(nutrientBarModel(rangeNoSoftMax, 504).overshootT, 0, 'range, exactly at band end: not yet overshooting');
+  eq(Math.round(nutrientBarModel(rangeNoSoftMax, (504 + rp) / 2).overshootT * 100), 50, 'range, no softMax: red point falls back to 1.25x the band end');
+
+  // A hard ceiling (band end === upperLimit) has no headroom to ramp across:
+  // exceeding a safety limit is binary, so it reddens the instant it's crossed.
+  const ulDef = { target: 1000, direction: 'min', upperLimit: 2500 };
+  eq(nutrientBarModel(ulDef, 2500).overshootT, 0, 'min w/ UL, exactly at the ceiling: not yet a breach');
+  eq(nutrientBarModel(ulDef, 2501).overshootT, 1, 'min w/ UL, one unit past the ceiling: instantly full red, no gradual ramp');
+
+  const noneDef = { target: null, direction: 'none' };
+  eq(nutrientBarModel(noneDef, 120).unknown, false, 'a real value with no target is still known, just not barred');
+  eq(nutrientBarModel(noneDef, 120).band, null, 'direction none: no band, no bar');
+  eq(nutrientBarModel(noneDef, null).unknown, true, 'direction none with no logged value: still unknown');
 }
 
 // -- alert qualification and detection --
@@ -692,6 +762,7 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
   const alerts = computeAlerts(feed, today);
   eq(alerts.length, 1, 'one nutrient breaches its threshold enough to alert');
   eq(alerts[0].key, 'protein', 'the breaching nutrient is identified');
+  eq(alerts[0].type, 'streak', 'target/band breaches are tagged as the trailing-window streak kind');
   eq(alerts[0].breachDays.length, 6, '6 of the 10 days were below 70% of target');
   eq(summarizeAlerts(alerts), 'Protein low — 6 of last 10 days', 'single-alert message matches the spec example');
   eq(summarizeAlerts([]), null, 'no alerts: no message, no empty-state text');
@@ -721,6 +792,85 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
     alertRules,
   };
   eq(computeAlerts(rangeFeed, today).length, 0, '"range" nutrient far under target on every day: no low-side alert');
+}
+
+// -- schema v6: upperLimit alerts fire immediately, not on a streak --
+{
+  const alertRules = {
+    windowDays: 10, qualifyingDaysRequired: 5, lowThresholdPct: 70, highThresholdPct: 100,
+    minCoveragePct: 80, minConfidence: 'medium',
+    allowedTargetConfidence: ['confirmed', 'guideline', 'derived'],
+  };
+  const zincDef = {
+    label: 'Zinc', target: 14, direction: 'min', group: 'mineral', targetConfidence: 'confirmed',
+    upperLimit: 40, upperLimitNote: 'Closest ceiling to its target of any nutrient here.',
+  };
+  const goodEntry = { macroConfidence: 'high', microConfidence: 'high' };
+  const badEntry = { macroConfidence: 'low', microConfidence: 'low' };
+  const today = '2026-07-20';
+
+  // A single qualifying breaching day is enough — no qualifyingDaysRequired
+  // tally the way computeAlerts needs for target/band breaches.
+  const oneBreachFeed = {
+    nutrients: { zinc: zincDef },
+    days: {
+      [today]: { totals: { zinc: 20 }, coverage: { zinc: 90 }, entries: [goodEntry] },
+      '2026-07-19': { totals: { zinc: 45 }, coverage: { zinc: 90 }, entries: [goodEntry] }, // over 40: breach
+    },
+    alertRules,
+  };
+  const ulAlerts = computeUpperLimitAlerts(oneBreachFeed, today);
+  eq(ulAlerts.length, 1, 'a single day over the ceiling is enough to fire');
+  eq(ulAlerts[0].type, 'upperLimit', 'tagged as the immediate-fire kind');
+  eq(ulAlerts[0].breachDays, ['2026-07-19'], 'the specific breaching day is named');
+
+  // A breach on a non-qualifying day (bad confidence) doesn't count — the
+  // reading isn't trustworthy enough to accuse it of anything.
+  const unqualifiedFeed = {
+    nutrients: { zinc: zincDef },
+    days: { [today]: { totals: { zinc: 45 }, coverage: { zinc: 90 }, entries: [badEntry] } },
+    alertRules,
+  };
+  eq(computeUpperLimitAlerts(unqualifiedFeed, today).length, 0, 'a breach on a non-qualifying day never fires');
+
+  // A nutrient with no upperLimit (e.g. magnesium — deliberately null in the
+  // real feed) can never fire this alert, no matter how far over its own
+  // target it reads.
+  const noUlFeed = {
+    nutrients: { magnesium: { label: 'Magnesium', target: 400, direction: 'min', group: 'mineral', targetConfidence: 'confirmed', upperLimit: null } },
+    days: { [today]: { totals: { magnesium: 999999 }, coverage: { magnesium: 90 }, entries: [goodEntry] } },
+    alertRules,
+  };
+  eq(computeUpperLimitAlerts(noUlFeed, today).length, 0, 'no upperLimit: never fires, regardless of the reading');
+
+  // Under the ceiling, even by a lot: no breach.
+  const fineFeed = {
+    nutrients: { zinc: zincDef },
+    days: { [today]: { totals: { zinc: 30 }, coverage: { zinc: 90 }, entries: [goodEntry] } },
+    alertRules,
+  };
+  eq(computeUpperLimitAlerts(fineFeed, today).length, 0, 'under the ceiling: no alert');
+
+  eq(summarizeAlerts(ulAlerts), 'Zinc over the safe upper limit', 'upperLimit alerts get distinct, more serious wording');
+  eq(summarizeAlerts([ulAlerts[0], ulAlerts[0]]), '2 nutrients need attention', 'mixed-type alerts still summarize to a plain count');
+
+  // computeAllAlerts merges both kinds, upperLimit first.
+  const combinedFeed = {
+    nutrients: { zinc: zincDef, protein: { label: 'Protein', target: 150, direction: 'min', group: 'macro', targetConfidence: 'derived' } },
+    days: {
+      ...oneBreachFeed.days,
+      ...Object.fromEntries(Array.from({ length: 10 }, (_, i) => {
+        const key = i === 0 ? today : `2026-07-${String(20 - i).padStart(2, '0')}`;
+        return [key, { totals: { zinc: 20, protein: 50 }, coverage: { zinc: 90, protein: 90 }, entries: [goodEntry] }];
+      })),
+      '2026-07-19': { totals: { zinc: 45, protein: 50 }, coverage: { zinc: 90, protein: 90 }, entries: [goodEntry] },
+    },
+    alertRules,
+  };
+  const combined = computeAllAlerts(combinedFeed, today);
+  eq(combined.length, 2, 'both an upperLimit breach and a streak breach show up together');
+  eq(combined[0].type, 'upperLimit', 'upperLimit alerts sort first, as the more serious kind');
+  eq(combined[1].type, 'streak', 'streak alert follows');
 }
 
 // -- nutrition history: per-nutrient day status, "all goals hit" streaks --

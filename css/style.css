@@ -203,16 +203,39 @@ input, select, textarea { font: inherit; color: inherit; }
 .nutri-row-plain { flex-direction: row; align-items: center; justify-content: space-between; min-height: 0; }
 .nutri-row-plain .nutri-row-val { font-size: 13px; }
 
-.nutri-track { position: relative; height: 6px; border-radius: 999px; background: var(--raise3); }
-.nutri-fill { height: 100%; border-radius: 999px; transition: width 0.5s var(--spring), background-color 0.4s ease; }
-.nutri-marker {
+/* direction glyph: a redundant, colour-independent accessibility channel */
+.nutri-glyph { color: var(--faint); font-weight: 700; flex: none; font-size: 12px; margin-right: 2px; }
+
+.nutri-track { position: relative; height: 6px; border-radius: 999px; background: var(--raise3); overflow: hidden; }
+/* Fill must be position:absolute too (not just in-flow) so it paints above
+   the band/hard-zone rather than under them — same stacking layer, later in
+   the DOM, so it wins. */
+.nutri-fill {
   position: absolute;
-  top: -2px;
-  bottom: -2px;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 999px;
+  transition: width 0.5s var(--spring), background-color 0.4s ease;
+}
+/* satisfied band: a section of rail one step brighter than the empty track,
+   sitting under the fill — visible ahead of the fill, covered once it's
+   reached. A hard (upperLimit) ceiling gets a low-opacity red zone past the
+   band's end instead of neutral rail, marking the danger zone before intake
+   reaches it. */
+.nutri-band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+  background: var(--raise2);
+}
+.nutri-hardzone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
   right: 0;
-  width: 2px;
-  border-radius: 1px;
-  background: rgba(255, 240, 220, 0.55);
+  background: rgba(228, 87, 61, 0.28);
 }
 
 .nutri-alert-strip {
@@ -275,10 +298,20 @@ input, select, textarea { font: inherit; color: inherit; }
 .nutri-warn.collapsed .nutri-warn-days { display: none; }
 .nutri-warn-list { display: flex; flex-direction: column; gap: 8px; }
 
+/* upperLimit breaches: an immediate safety finding, not a slow trend —
+   distinct wording (in JS) and a stronger head treatment here. The note is
+   shown unconditionally, not behind the collapse toggle, since it usually
+   explains that the ceiling applies to supplements only. */
+.nutri-warn.severe .nutri-warn-head { background: rgba(228, 87, 61, 0.14); }
+.nutri-warn.severe .nutri-warn-head:active { background: rgba(228, 87, 61, 0.22); }
+.nutri-warn-note { font-size: 12.5px; color: var(--dim); padding: 8px 10px 0; line-height: 1.4; }
+
 /* progress ring */
 .ringbox { position: relative; width: 108px; height: 108px; }
 .ringbox svg { width: 100%; height: 100%; transform: rotate(-90deg); display: block; }
 .ring-track { fill: none; stroke: var(--raise3); }
+/* the satisfied band, applied radially (nutrition's energy ring only) */
+.ring-band { fill: none; stroke: var(--raise2); }
 .ring-prog {
   fill: none;
   stroke: var(--c);
@@ -1063,4 +1096,15 @@ input[type="date"].input { line-height: 48px; }
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Nutrition's colour law never relies on hue alone (chroma/lightness carry
+   the same "goodness" signal, plus the direction glyph as a third channel),
+   but a requested higher-contrast mode still gets firmer edges on the bits
+   that are otherwise subtle low-contrast fills. */
+@media (prefers-contrast: more) {
+  .nutri-track { background: var(--raise2); }
+  .nutri-band { background: var(--raise3); outline: 1px solid var(--dim); outline-offset: -1px; }
+  .nutri-hardzone { background: rgba(228, 87, 61, 0.45); }
+  .ring-band { stroke: var(--raise3); }
 }

@@ -64,7 +64,7 @@ updates to a file it doesn't control the deploys of.
 
 ```jsonc
 {
-  "schema": 4,
+  "schema": 6,
   "updatedAt": "...", "timezone": "...",
   "profile": { "sex", "ageBand", "weightKg", "goal", "sources": [...], "notes": [...] },
   "alertRules": { "windowDays", "qualifyingDaysRequired", "lowThresholdPct",
@@ -75,6 +75,11 @@ updates to a file it doesn't control the deploys of.
       "label", "unit", "target", "direction", "group", "display",
       "targetConfidence", "source",
       "softMax": "optional — the overshoot point where a max/range nutrient is clearly too high",
+      "targetMin": "optional — published lower bound of a dietary range (e.g. AMDR)",
+      "targetMax": "optional — published upper bound of a dietary range",
+      "upperLimit": "optional — Tolerable Upper Intake Level, a SAFETY ceiling, distinct from targetMax",
+      "upperLimitNote": "optional — caveat, e.g. many ULs apply only to supplemental forms",
+      "upperLimitSource": "optional — provenance for upperLimit",
       "note": "optional — a caveat about this target, surfaced on tap"
     }
   },
@@ -87,6 +92,16 @@ updates to a file it doesn't control the deploys of.
   }
 }
 ```
+
+`targetMin`/`targetMax` are only present where a real published range exists
+(currently the AMDR for carbs and fat) — the app never synthesises a band by
+scaling `target`; a missing bound is information, not a gap to fill in.
+`upperLimit` is present for 16 nutrients, each at least 2.2x its own target,
+so ordinary diet alone never approaches it — it only matters once
+supplements are in the picture. A `null` `upperLimit` (or `targetMin`/
+`targetMax`) is itself a finding — ten nutrients carry an `upperLimitNote`
+explaining why no UL is determinable, and the app surfaces that note rather
+than treating the absence as missing data.
 
 - `direction` — `"min"` (want at least this much), `"max"` (want at most),
   `"range"` (both a floor and a ceiling matter, but only the ceiling is ever
@@ -138,27 +153,109 @@ only its ceiling — the low side just isn't policed the same way a strict
 minimum is). `direction:"none"` and disallowed `targetConfidence` nutrients
 never alert, per above.
 
+`upperLimit` breaches work differently: a single qualifying day over the
+ceiling is enough to alert (`computeUpperLimitAlerts`, not the
+`qualifyingDaysRequired` tally above) — a safety finding isn't a trend to
+wait out. It's still gated on the same day-qualification rule, since an
+unqualified day's reading isn't trustworthy enough to accuse it of
+anything, safety included. A nutrient with `upperLimit: null` can never
+raise this alert. In the detail sheet these get distinct, more serious
+wording and a stronger visual treatment than an ordinary target/band
+breach, and surface `upperLimitNote` directly (not behind a tap) since most
+ULs concern supplemental forms only and that caveat matters.
+
 The tile shows nothing when there are no alerts (no "all good" banner —
 calm by default) and a single slim strip along the bottom edge when there
 are: the specific nutrient and count for one alert ("Magnesium low — 6 of
-last 10 days"), a plain count for several ("3 nutrients need attention").
-Tapping it opens the detail sheet scrolled to the warnings.
+last 10 days", or "Zinc over the safe upper limit" for a UL breach), a
+plain count for several ("3 nutrients need attention"), upperLimit alerts
+listed first as the more serious kind. Tapping it opens the detail sheet
+scrolled to the warnings.
+
+### The scale, and the satisfied band
+
+Every nutrient bar (and, radially, the home tile's energy ring) is drawn by
+one shared function, `renderNutrientBar` (`js/views/nutrition.js`) — every
+surface that shows a nutrient calls it, so no two surfaces can ever
+disagree about what a nutrient's bar looks like. It reads a single pure-math
+model, `nutrientBarModel` (`js/nutrition.js`), that turns a nutrient's
+definition plus its current value into a rail, a "satisfied" band, a fill
+fraction, and a colour — no DOM, fully unit-tested.
+
+The rail a bar/ring is drawn against always spans `[0, railMax]`:
+
+```
+base    = (direction === "min") ? target : (softMax ?? targetMax ?? target)
+railMax = base / 0.85
+if (upperLimit && current >= 0.6 * upperLimit) railMax = upperLimit / 0.9
+if (current > railMax) railMax = current / 0.95
+```
+
+The middle rule is deliberate: every `upperLimit` is at least 2.2x its
+target, so from food alone the ceiling never appears on the rail and never
+clutters it — it only enters once intake actually approaches it (i.e. once
+supplements are plausibly involved). The last rule just guarantees the
+current reading never clips past the rail's own edge.
+
+Within that rail, a **satisfied band** replaces the old fixed tick marker
+at the target — a section of rail with more contrast than the empty track:
+
+```
+"min"    band = [target, upperLimit ?? railMax]
+"max"    band = [0, target]
+"range"  band = [targetMin ?? target, targetMax ?? softMax ?? target]
+"none"   no band
+```
+
+(Energy is `"range"` with `targetMin: null` and no `targetMax`, only a
+`softMax` — so its band runs `target` to `softMax`, reading as satisfied
+anywhere from 3100 to 3500 kcal and only warming past that, rather than
+collapsing to a single point at `target`.)
+
+Where the fill ends relative to the band is the whole message: short of it
+means under, inside means satisfied, past it means over — there's no
+separate marker to read. A band whose end **is** the nutrient's own
+`upperLimit` is a *hard* ceiling: the rail beyond it is rendered in a low-
+opacity red tint, distinguishing a safety limit from an ordinary dietary
+bound without needing a legend. A soft ceiling (`targetMax`/`softMax`)
+leaves the rail past it neutral.
 
 ### Colour
 
 Each nutrient gets its own accent hue, deterministically derived from its
 key (not hand-picked — there are ~34 of them) so distinct nutrients are
-visually distinguishable without a maintained palette. A bar's *chroma*
-(not its hue) scales with `current / target` — grey and lifeless at 0,
-fully saturated at 1 — so it visibly "comes alive" approaching the goal.
-Width also tracks that ratio, capped at 100%: exceeding a `"min"` target is
-purely good and never changes colour or behaviour further. A `"max"`/
-`"range"` nutrient that's overshot its target holds its bar at 100% width
-and instead slides its *hue* toward red as it climbs from `target` toward
-`softMax`, with a thin fixed marker at the target position so the boundary
-stays legible even before it's reached. Colour is computed in `oklch()`
-where the browser supports it (Safari 16.4+), falling back to `hsl()`
-otherwise — feature-detected via `CSS.supports()`.
+visually distinguishable without a maintained palette. Chroma (not hue)
+tracks *goodness*, not magnitude: 0.15 (near-grey, never fully flat) ramping
+to 1.0 (fully saturated) as current climbs from 0 to the band's start, then
+full saturation anywhere inside or past the band. Width tracks
+`current / railMax` directly — no artificial 100% freeze.
+
+Past the band's end, the *hue* rotates toward red instead: full red at
+`softMax` if one exists, otherwise instantly at a hard ceiling (exceeding a
+safety limit is binary, not a matter of degree — see above), otherwise at
+1.25x the band's end. Exceeding a `"min"` target with no `upperLimit` never
+reddens at all — going over a floor with nothing above it to be careful of
+is purely good, however far past it you are (fibre at 150% must not look
+like a warning). Colour is computed in `oklch()` where the browser supports
+it (Safari 16.4+), falling back to `hsl()` otherwise — feature-detected via
+`CSS.supports()` — and never relies on hue alone: a small direction glyph
+(`↑` min, `↓` max, `↕` range) prefixes every nutrient's label everywhere it
+appears, as a colour-independent fallback.
+
+### targetMax vs upperLimit
+
+They read similarly (both a ceiling) but mean different things, and the app
+treats them very differently:
+
+- **`targetMax`** (and `targetMin`) describe a *dietary* range — the AMDR
+  band for carbs and fat, for instance. Landing outside it is worth noting
+  but not alarming; it feeds the same trailing-window streak alert as any
+  other target breach (see below).
+- **`upperLimit`** is a *safety* ceiling (the Tolerable Upper Intake
+  Level) — how much of a nutrient is known to become harmful, mostly
+  relevant once supplements are involved rather than food alone. Breaching
+  it fires its own, more serious alert **immediately** on a single
+  qualifying day, not after a run of several — see Alert rules above.
 
 ## Development
 

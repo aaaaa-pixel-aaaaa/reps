@@ -79,45 +79,114 @@ export function nutrientHue(key) {
   return (raw + (clockwise ? push : -push) + 360) % 360;
 }
 
-// Bar-fill math for one nutrient, as 0..1 numbers only — views/nutrition.js
-// turns these into actual CSS colours. Mirrors hitIntensity/periodIntensity
-// in model.js: pure ratio math here, presentation in the view layer.
+// ---- schema v6: published bounds (targetMin/targetMax/upperLimit) ----
 //
-//   unknown     no value at all (absent from totals) — callers must render
-//               this distinctly from an actual zero, never collapse both
-//               down to the same "–".
-//   widthPct    0..100, clamped — a "min" nutrient holds at 100% past its
-//               target (exceeding a minimum is good, it doesn't grow further
-//               or change colour); a "max"/"range" nutrient also holds at
-//               100% once its target is reached (per the spec: overshoot
-//               changes colour, not width).
-//   chromaT     0..1 — how far the colour has climbed from near-grey (0) to
-//               fully saturated (1) as current approaches target. Same for
-//               every direction; the bar "comes alive" as you approach any
-//               target, not just a "min" one.
-//   overshootT  0 until a "max"/"range" nutrient exceeds its target, then
-//               0..1 as current climbs from target to softMax — this is
-//               what should push the hue toward red, not the width.
-//   showMarker  whether to draw the fixed reference line at the target
-//               position — only meaningful for "max"/"range" nutrients,
-//               since a "min" nutrient's target isn't a boundary to flag.
-export function barFill(def, current) {
-  if (current == null || def.target == null || !(def.target > 0)) {
-    return { unknown: current == null, ratio: null, widthPct: 0, chromaT: 0, overshootT: 0, showMarker: false };
+// A redundant-channel prefix for every nutrient label ("↑ Protein"), so
+// direction reads without relying on the bar's colour alone.
+export const DIRECTION_GLYPH = { min: '↑', max: '↓', range: '↕' };
+export function directionGlyph(direction) {
+  return DIRECTION_GLYPH[direction] || '';
+}
+
+// The rail a nutrient's bar/ring is drawn against. It always spans
+// [0, railMax], sized off the nutrient's own ceiling (softMax, else
+// targetMax, else target — "min" nutrients just use target, they have no
+// upper figure of their own) with 15% headroom, so an ordinary reading never
+// crowds the edge. A real upperLimit (Tolerable Upper Intake Level) is at
+// least 2.2x its target in this feed, so it stays off-rail — irrelevant to
+// diet alone — until intake actually gets close (>=60% of it), at which
+// point the rail tightens around it so a supplement-driven approach to the
+// ceiling is legible. Whatever the first two rules produce, the rail is
+// still widened to fit current if current would otherwise clip past it.
+export function nutrientRailMax(def, current) {
+  if (def.target == null || !(def.target > 0)) return null;
+  const base = def.direction === 'min' ? def.target : (def.softMax ?? def.targetMax ?? def.target);
+  let railMax = base / 0.85;
+  if (def.upperLimit != null && current != null && current >= 0.6 * def.upperLimit) {
+    railMax = def.upperLimit / 0.9;
   }
-  const ratio = current / def.target;
-  const widthPct = Math.min(Math.max(ratio, 0), 1) * 100;
-  const chromaT = widthPct / 100;
-  const capped = def.direction === 'max' || def.direction === 'range';
+  if (current != null && current > railMax) {
+    railMax = current / 0.95;
+  }
+  return railMax;
+}
+
+// The "satisfied" zone, drawn as a section of rail with more contrast than
+// the empty track — this replaces the old fixed tick marker at the target.
+// `hard` marks a real safety ceiling as the band's own upper edge, which
+// gets a red-tinted rail beyond it (a soft ceiling like targetMax/softMax
+// leaves the rail past it neutral).
+//
+// "range" nutrients without a published targetMax (in this feed, only
+// energy) fall back to softMax for the band's end. Energy's targetMin is
+// null and it has no targetMax, so the literal targetMax ?? target formula
+// would collapse the band to a single point at target — but energy is
+// meant to read as satisfied anywhere from target up to softMax (3100 to
+// 3500 kcal), only warming past that, so softMax fills in as the band end.
+export function nutrientBand(def, railMax) {
+  if (def.direction === 'none' || def.target == null || !(def.target > 0)) return null;
+  let start, end;
+  if (def.direction === 'min') { start = def.target; end = def.upperLimit ?? railMax; }
+  else if (def.direction === 'max') { start = 0; end = def.target; }
+  else { start = def.targetMin ?? def.target; end = def.targetMax ?? def.softMax ?? def.target; }
+  return { start, end, hard: def.upperLimit != null && end === def.upperLimit };
+}
+
+// The point past band.end where the colour reaches full red. A hard ceiling
+// has no further headroom to ramp across — exceeding a safety limit is a
+// binary fact, not a matter of degree, so it reddens the instant it's
+// crossed rather than gradually.
+function nutrientRedPoint(def, band) {
+  if (def.softMax != null) return def.softMax;
+  if (band.hard) return band.end;
+  return band.end * 1.25;
+}
+
+// The full bar model for one nutrient — the single source every surface
+// (tile rows, sheet rows, the energy ring) reads to draw scale, band, fill,
+// and colour, so no two surfaces can ever disagree about what a nutrient's
+// bar should look like. Mirrors hitIntensity/periodIntensity in model.js:
+// pure ratio math here, DOM/CSS in the view layer.
+//
+//   unknown     no value logged at all — callers must render this as a dash,
+//               never a zero-width fill standing in for a real zero.
+//   railMax     the rail's right edge, in the nutrient's own unit.
+//   band        { start, end, hard } in the same unit, or null for
+//               direction:"none" (no target to be "satisfied" against).
+//   fillFrac    0..1, current's position along [0, railMax].
+//   chromaT     0..1 — 0.15 (near-grey, never fully flat) ramping to 1.0
+//               (full identity-hue saturation) as current climbs from 0 to
+//               band.start; already 1.0 anywhere inside or past the band.
+//   overshootT  0 until current passes band.end, then 0..1 as it climbs
+//               from there to the red point — this pushes hue toward red,
+//               width is unaffected. Exceeding a "min" target that carries
+//               no upperLimit never reddens: going over a floor with no
+//               safety ceiling is purely good.
+export function nutrientBarModel(def, current) {
+  const glyph = directionGlyph(def.direction);
+  if (def.direction === 'none' || def.target == null || !(def.target > 0)) {
+    return { unknown: current == null, glyph, railMax: null, band: null, fillFrac: 0, chromaT: 0, overshootT: 0 };
+  }
+  if (current == null) {
+    const railMax = nutrientRailMax(def, null);
+    return { unknown: true, glyph, railMax, band: nutrientBand(def, railMax), fillFrac: 0, chromaT: 0, overshootT: 0 };
+  }
+  const railMax = nutrientRailMax(def, current);
+  const band = nutrientBand(def, railMax);
+  const fillFrac = Math.min(1, Math.max(0, current / railMax));
+
+  const chromaT = (band.start <= 0 || current >= band.start)
+    ? 1
+    : 0.15 + 0.85 * Math.max(0, current / band.start);
+
   let overshootT = 0;
-  if (capped && current > def.target) {
-    // Not every "range" nutrient in the feed carries a softMax (carbs
-    // doesn't) — without a defined ceiling there's nothing to ramp toward,
-    // so any exceedance reads as fully red rather than guessing at one.
-    const soft = def.softMax > def.target ? def.softMax : def.target;
-    overshootT = soft > def.target ? Math.min(Math.max((current - def.target) / (soft - def.target), 0), 1) : 1;
+  const neverReddens = def.direction === 'min' && def.upperLimit == null;
+  if (!neverReddens && current > band.end) {
+    const redPoint = nutrientRedPoint(def, band);
+    overshootT = redPoint > band.end ? Math.min(1, (current - band.end) / (redPoint - band.end)) : 1;
   }
-  return { unknown: false, ratio, widthPct, chromaT, overshootT, showMarker: capped };
+
+  return { unknown: false, glyph, railMax, band, fillFrac, chromaT, overshootT };
 }
 
 // Whether a nutrient's target is trusted enough to ever alert on, per
@@ -179,10 +248,44 @@ export function computeAlerts(nutrition, today = todayKey()) {
       if (breach) breachDays.push(dateKey);
     }
     if (breachDays.length >= alertRules.qualifyingDaysRequired) {
-      alerts.push({ key, def, breachDays: breachDays.sort().reverse(), windowDays: alertRules.windowDays });
+      alerts.push({ key, def, type: 'streak', breachDays: breachDays.sort().reverse(), windowDays: alertRules.windowDays });
     }
   }
   return alerts;
+}
+
+// upperLimit breaches are a safety finding, not a slow trend — a single
+// qualifying day over the ceiling is enough to alert, unlike the trailing-
+// window tally computeAlerts uses for target/band breaches. Still gated on
+// the same day-qualification rule (coverage + confidence), since an
+// unqualified day's reading isn't trustworthy enough to accuse it of
+// anything, safety included. Never fires for a nutrient with no upperLimit.
+export function computeUpperLimitAlerts(nutrition, today = todayKey()) {
+  const { nutrients, days, alertRules } = nutrition;
+  const alerts = [];
+  for (const key in nutrients) {
+    const def = nutrients[key];
+    if (def.upperLimit == null) continue;
+    const breachDays = [];
+    for (let i = 0; i < alertRules.windowDays; i++) {
+      const dateKey = addDays(today, -i);
+      const day = days[dateKey];
+      if (!dayQualifies(alertRules, def, day, key)) continue;
+      const current = nutrientCurrent(day, key);
+      if (current == null) continue;
+      if (current > def.upperLimit) breachDays.push(dateKey);
+    }
+    if (breachDays.length) {
+      alerts.push({ key, def, type: 'upperLimit', breachDays: breachDays.sort().reverse(), windowDays: alertRules.windowDays });
+    }
+  }
+  return alerts;
+}
+
+// Everything the tile/sheet warn about, upperLimit breaches first — they're
+// the more serious, immediate-fire kind.
+export function computeAllAlerts(nutrition, today = todayKey()) {
+  return [...computeUpperLimitAlerts(nutrition, today), ...computeAlerts(nutrition, today)];
 }
 
 // Tile copy: one alert names it, several are summarized so the tile never
@@ -190,9 +293,10 @@ export function computeAlerts(nutrition, today = todayKey()) {
 export function summarizeAlerts(alerts) {
   if (!alerts.length) return null;
   if (alerts.length === 1) {
-    const { def, breachDays, windowDays } = alerts[0];
-    const dir = def.direction === 'min' ? 'low' : 'high';
-    return `${def.label} ${dir} — ${breachDays.length} of last ${windowDays} days`;
+    const a = alerts[0];
+    if (a.type === 'upperLimit') return `${a.def.label} over the safe upper limit`;
+    const dir = a.def.direction === 'min' ? 'low' : 'high';
+    return `${a.def.label} ${dir} — ${a.breachDays.length} of last ${a.windowDays} days`;
   }
   return `${alerts.length} nutrients need attention`;
 }

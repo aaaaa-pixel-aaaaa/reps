@@ -3,7 +3,7 @@
 // is nutrition.json: it's maintained outside this repo, so it's served
 // network-first with a cache fallback instead (see the fetch handler below)
 // — cache-first would mean updates to it never reach an installed app.
-const VERSION = 'reps-v1.0.15';
+const VERSION = 'reps-v1.0.16';
 const CACHE = `reps-${VERSION}`;
 
 const NUTRITION_URL = 'https://raw.githubusercontent.com/aaaaa-pixel-aaaaa/reps/main/nutrition.json';

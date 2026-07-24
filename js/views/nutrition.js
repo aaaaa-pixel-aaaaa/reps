@@ -8,8 +8,8 @@ import {
 } from '../dates.js';
 import {
   groupedNutrients, alwaysNutrients, nutrientCurrent, nutrientCoverage,
-  dayEntries, barFill, nutrientHue, computeAlerts, summarizeAlerts, RED_HUE,
-  nutrientDayStatus, nutritionStats,
+  dayEntries, nutrientBarModel, directionGlyph, nutrientHue, computeAllAlerts,
+  summarizeAlerts, RED_HUE, nutrientDayStatus, nutritionStats,
 } from '../nutrition.js';
 import { nutritionData } from '../nutrition-store.js';
 import { h, icon, haptic, openSheet, toast, countUp, ringSVG } from '../ui.js';
@@ -48,9 +48,11 @@ function fmtNutrient(x) {
 // state on a brand-new element. Mirrors home.js's animatedRing: paint the
 // remembered old value first, then apply the real value a frame later so
 // the CSS transition on width/background actually has something to animate
-// between.
+// between. Band/hard-zone placement isn't animated — it barely moves render
+// to render, and re-deriving it fresh every time is simpler than memoizing
+// a rectangle nobody will see slide.
 const lastBar = new Map(); // nutrient key -> { widthPct, color }
-function animatedBar(key, widthPct, color, showMarker) {
+function animatedFill(key, widthPct, color) {
   const fill = h('div', { class: 'nutri-fill' });
   const prev = lastBar.get(key);
   fill.style.width = (prev ? prev.widthPct : widthPct) + '%';
@@ -62,13 +64,43 @@ function animatedBar(key, widthPct, color, showMarker) {
       fill.style.background = color;
     }));
   }
-  return h('div', { class: 'nutri-track' }, fill, showMarker ? h('div', { class: 'nutri-marker' }) : null);
+  return fill;
+}
+
+const pct = (v, railMax) => Math.max(0, Math.min(100, (v / railMax) * 100));
+
+// The rail: neutral track, the satisfied-band highlight, a red-tinted zone
+// beyond a hard (upperLimit) ceiling if there's rail past it, then the fill
+// on top — so the band reads as "still ahead" until the fill covers it, and
+// as "already inside" once it does. This one function is the only place any
+// surface draws a nutrient's track; the tile rows, sheet rows and (via
+// energyRing) the home ring's radial band all go through the same model.
+function nutriTrack(key, model, color) {
+  const kids = [];
+  if (model.band && model.railMax) {
+    const left = pct(model.band.start, model.railMax);
+    const right = pct(model.band.end, model.railMax);
+    kids.push(h('div', { class: 'nutri-band', style: `left:${left}%;width:${Math.max(0, right - left)}%` }));
+    if (model.band.hard && right < 100) {
+      kids.push(h('div', { class: 'nutri-hardzone', style: `left:${right}%` }));
+    }
+  }
+  kids.push(animatedFill(key, model.unknown ? 0 : model.fillFrac * 100, model.unknown ? 'transparent' : color));
+  return h('div', { class: 'nutri-track' }, kids);
+}
+
+function glyphSpan(glyph) {
+  return glyph ? h('span', { class: 'nutri-glyph', 'aria-hidden': 'true' }, glyph) : null;
 }
 
 let lastEnergyProgress = null;
 let lastEnergyColor = null;
-function energyRing(progress, color) {
-  const svg = ringSVG(92, 8, lastEnergyProgress ?? progress);
+function energyRing(model, color) {
+  const progress = model.unknown ? 0 : model.fillFrac;
+  const band = model.band && model.railMax
+    ? { start: model.band.start / model.railMax, end: model.band.end / model.railMax }
+    : null;
+  const svg = ringSVG(92, 8, lastEnergyProgress ?? progress, band);
   const prog = svg.querySelector('.ring-prog');
   prog.style.stroke = lastEnergyColor ?? color;
   if (lastEnergyProgress !== progress || lastEnergyColor !== color) {
@@ -114,31 +146,35 @@ function unconfirmedBadge() {
   }, '?');
 }
 
-// ---- one nutrient row: label(+markers), current/target, bar ----
-// `detail` toggles the coverage dot and note/unconfirmed markers, which the
-// compact home-tile bars deliberately don't show.
-function barRow(key, def, current, { coverage, detail = false } = {}) {
+// ---- the one shared nutrient renderer ----
+// Every surface that shows a nutrient's current-vs-target — the tile's four
+// macro rows, every row in the detail sheet's groups — calls this and only
+// this. It owns the scale, band, fill, colour and glyph; a surface only
+// picks a size (via CSS) and whether it's in "detail" mode (coverage dot,
+// note/unconfirmed badges — noise the compact tile rows don't need).
+export function renderNutrientBar(key, def, current, { coverage, detail = false } = {}) {
+  const model = nutrientBarModel(def, current);
   const unit = def.unit ? ` ${def.unit}` : '';
   const labelKids = [
+    glyphSpan(model.glyph),
     detail ? coverageDot(current, coverage) : null,
     h('span', { class: 'nutri-row-label' }, def.label),
     detail && def.note ? noteBadge(def.note) : null,
     detail && def.targetConfidence === 'unconfirmed' ? unconfirmedBadge() : null,
-  ].filter(Boolean);
+  ];
 
   if (def.direction === 'none') {
     return h('div', { class: 'nutri-row nutri-row-plain' },
       h('span', { class: 'nutri-row-label-group' }, labelKids),
       h('span', { class: 'nutri-row-val num' }, current == null ? '–' : `${fmtNutrient(current)}${unit}`));
   }
-  const fs = barFill(def, current);
-  const color = fs.unknown ? 'transparent' : barColor(nutrientHue(key), fs.chromaT, fs.overshootT);
-  const valueText = fs.unknown ? '–' : `${fmtNutrient(current)} / ${fmtNutrient(def.target)}${unit}`;
+  const color = model.unknown ? 'transparent' : barColor(nutrientHue(key), model.chromaT, model.overshootT);
+  const valueText = model.unknown ? '–' : `${fmtNutrient(current)} / ${fmtNutrient(def.target)}${unit}`;
   return h('div', { class: 'nutri-row' },
     h('div', { class: 'nutri-row-head' },
       h('span', { class: 'nutri-row-label-group' }, labelKids),
       h('span', { class: 'nutri-row-val num' }, valueText)),
-    animatedBar(key, fs.widthPct, color, fs.showMarker));
+    nutriTrack(key, model, color));
 }
 
 // ---- home tile ----
@@ -150,13 +186,12 @@ export function renderNutritionTile() {
   const day = data.days[today];
   const energyDef = data.nutrients.energy;
   const current = nutrientCurrent(day, 'energy');
-  const fs = barFill(energyDef, current);
-  const progress = fs.unknown ? 0 : Math.min(1, fs.ratio);
-  const color = fs.unknown ? 'var(--raise3)' : barColor(nutrientHue('energy'), fs.chromaT, fs.overshootT);
+  const model = nutrientBarModel(energyDef, current);
+  const color = model.unknown ? 'var(--raise3)' : barColor(nutrientHue('energy'), model.chromaT, model.overshootT);
 
-  const rows = alwaysNutrients(data.nutrients).map(([key, def]) => barRow(key, def, nutrientCurrent(day, key)));
+  const rows = alwaysNutrients(data.nutrients).map(([key, def]) => renderNutrientBar(key, def, nutrientCurrent(day, key)));
 
-  const alerts = computeAlerts(data, today);
+  const alerts = computeAllAlerts(data, today);
   const summary = summarizeAlerts(alerts);
 
   return h('div', {
@@ -171,7 +206,7 @@ export function renderNutritionTile() {
     }, icon('cal')),
     h('div', { class: 'nutri-main' },
       h('div', { class: 'nutri-energy' },
-        h('div', { class: 'ringbox' }, energyRing(progress, color),
+        h('div', { class: 'ringbox' }, energyRing(model, color),
           h('div', { class: 'ring-label' },
             kcalNumeral(current),
             h('div', { class: 'ring-goal num' }, `/ ${fmtNutrient(energyDef.target)}`)))),
@@ -220,7 +255,8 @@ function nutrientPicker(nutrients, selected, onChange) {
     const eligible = items.filter(([, def]) => def.direction !== 'none');
     if (!eligible.length) return null;
     return h('optgroup', { label },
-      eligible.map(([key, def]) => h('option', { value: key, selected: key === selected }, def.label)));
+      eligible.map(([key, def]) => h('option', { value: key, selected: key === selected },
+        `${directionGlyph(def.direction)} ${def.label}`.trim())));
   }).filter(Boolean);
   const select = h('select', { class: 'input' }, options);
   select.value = selected;
@@ -311,10 +347,16 @@ export function renderNutritionHistory(root) {
 
 // ---- detail sheet ----
 
+// `type: "upperLimit"` alerts are a distinct, more serious kind — a single
+// day over a safety ceiling, not a slow trend — so they get their own
+// wording, a stronger head treatment (`.severe`, in CSS) and the
+// upperLimitNote surfaced directly rather than tucked behind a tap, since
+// most ULs concern supplemental forms only and that caveat matters.
 function warningRow(alert) {
-  const { def, breachDays, windowDays } = alert;
+  const { def, breachDays, windowDays, type } = alert;
+  const isUL = type === 'upperLimit';
   const dir = def.direction === 'min' ? 'low' : 'high';
-  const box = h('div', { class: 'nutri-warn collapsed' });
+  const box = h('div', { class: `nutri-warn collapsed${isUL ? ' severe' : ''}` });
   const head = h('button', {
     class: 'nutri-warn-head',
     'aria-expanded': 'false',
@@ -330,11 +372,14 @@ function warningRow(alert) {
     // red to itself, landing on plain red while still respecting the
     // oklch/hsl feature detection.
     h('span', { class: 'nutri-warn-dot', style: `background:${barColor(RED_HUE, 1, 1)}` }),
-    h('span', { class: 'nutri-warn-label' }, `${def.label} ${dir}`),
-    h('span', { class: 'nutri-warn-count num' }, `${breachDays.length}/${windowDays}`),
+    h('span', { class: 'nutri-warn-label' },
+      glyphSpan(directionGlyph(def.direction)),
+      isUL ? `${def.label} over safe limit` : `${def.label} ${dir}`),
+    h('span', { class: 'nutri-warn-count num' }, isUL ? String(breachDays.length) : `${breachDays.length}/${windowDays}`),
     h('span', { class: 'nutri-warn-chev' }, icon('chevD')));
-  const days = h('div', { class: 'nutri-warn-days' }, breachDays.map((k) => h('span', { class: 'dl-set num' }, shortDate(k))));
-  box.append(head, days);
+  box.append(head);
+  if (isUL && def.upperLimitNote) box.append(h('div', { class: 'nutri-warn-note' }, def.upperLimitNote));
+  box.append(h('div', { class: 'nutri-warn-days' }, breachDays.map((k) => h('span', { class: 'dl-set num' }, shortDate(k)))));
   return box;
 }
 
@@ -342,7 +387,7 @@ function nutrientGroupSection(label, items, day) {
   const box = h('div', { class: 'nutri-group collapsed' });
   const body = h('div', { class: 'nutri-group-body' },
     items.map(([key, def]) =>
-      barRow(key, def, nutrientCurrent(day, key), { coverage: nutrientCoverage(day, key), detail: true })));
+      renderNutrientBar(key, def, nutrientCurrent(day, key), { coverage: nutrientCoverage(day, key), detail: true })));
   const head = h('div', {
     class: 'nutri-group-head', role: 'button', tabindex: '0', 'aria-expanded': 'false',
     onclick: () => {
@@ -389,7 +434,7 @@ export function openNutritionSheet(dateKey = todayKey(), { scrollToWarnings = fa
   if (!data || !data.nutrients) { toast('Nutrition data not loaded yet'); return; }
   const day = data.days[dateKey];
   const isToday = dateKey === todayKey();
-  const alerts = computeAlerts(data, dateKey);
+  const alerts = computeAllAlerts(data, dateKey);
 
   openSheet({
     title: `Nutrition${isToday ? '' : ` · ${shortDate(dateKey)}`}`,

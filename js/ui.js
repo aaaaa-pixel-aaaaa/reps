@@ -218,7 +218,10 @@ export function countUp(el, from, to, fmt = String, ms = 380) {
 
 // ---- SVG progress ring ----
 
-export function ringSVG(size, stroke, progress) {
+// `band`, if given, is { start, end } as 0..1 fractions of the ring and
+// draws a higher-contrast arc segment (nutrition's satisfied-band, applied
+// radially) between the track and the progress arc.
+export function ringSVG(size, stroke, progress, band) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const off = c * (1 - Math.min(1, Math.max(0, progress)));
@@ -235,10 +238,20 @@ export function ringSVG(size, stroke, progress) {
     return el;
   };
   const track = mk('ring-track');
+  svg.append(track);
+  if (band) {
+    const a = Math.min(1, Math.max(0, band.start));
+    const b = Math.min(1, Math.max(a, band.end));
+    const bandEl = mk('ring-band');
+    const d = (b - a) * c;
+    bandEl.setAttribute('stroke-dasharray', `${d} ${c - d}`);
+    bandEl.setAttribute('stroke-dashoffset', c * (1 - a));
+    svg.append(bandEl);
+  }
   const prog = mk('ring-prog');
   prog.setAttribute('stroke-dasharray', c);
   prog.setAttribute('stroke-dashoffset', off);
-  svg.append(track, prog);
+  svg.append(prog);
   svg._setProgress = (p) => {
     prog.setAttribute('stroke-dashoffset', c * (1 - Math.min(1, Math.max(0, p))));
   };
