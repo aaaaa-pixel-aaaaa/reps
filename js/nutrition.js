@@ -82,8 +82,14 @@ export function nutrientHue(key) {
 // ---- schema v6: published bounds (targetMin/targetMax/upperLimit) ----
 //
 // A redundant-channel prefix for every nutrient label ("↑ Protein"), so
-// direction reads without relying on the bar's colour alone.
-export const DIRECTION_GLYPH = { min: '↑', max: '↓', range: '↕' };
+// direction reads without relying on the bar's colour alone. Each arrow
+// carries a trailing U+FE0E (text variation selector) — without it, iOS
+// promotes these particular arrows to their coloured emoji presentation
+// (a blue box around ↕️) instead of the flat monochrome glyph every other
+// row uses. The selector is baked in here, at the source, so every reader
+// (styled spans, and the plain-text <option> labels in the history picker,
+// which can't be reached with CSS) gets the fix for free.
+export const DIRECTION_GLYPH = { min: '↑︎', max: '↓︎', range: '↕︎' };
 export function directionGlyph(direction) {
   return DIRECTION_GLYPH[direction] || '';
 }
@@ -187,6 +193,40 @@ export function nutrientBarModel(def, current) {
   }
 
   return { unknown: false, glyph, railMax, band, fillFrac, chromaT, overshootT };
+}
+
+// Tick priority, used to resolve label collisions on the scale line: the
+// nutrient's own target matters more than a published dietary bound, which
+// in turn matters more than a borrowed safety ceiling.
+export const TICK_PRIORITY = { target: 2, bound: 1, upperLimit: 0 };
+
+// The white reference marks drawn on a nutrient's scale line — the exact
+// boundaries nutrientBand already computes (so the marks and the fill's
+// colour law can never disagree about where "satisfied" is), reframed as
+// point marks instead of a shaded rectangle so the goal stays legible
+// whatever colour the fill happens to be:
+//
+//   "min"    one mark, at target
+//   "max"    one mark, at target
+//   "range"  two marks, at the band's start and end (targetMin/targetMax
+//            where they exist; energy's target/softMax fallback otherwise —
+//            see nutrientBand)
+//   "none"   no marks
+//
+// upperLimit adds one more mark, but only once it's actually pulled onto
+// the rail (nutrientRailMax's own proximity rule) — off-rail, a mark for it
+// would be pointing at a position past the visible scale.
+export function nutrientTicks(def, model) {
+  if (!model.band || model.railMax == null) return [];
+  const { band, railMax } = model;
+  const ticks = [];
+  if (def.direction === 'min') ticks.push({ value: band.start, kind: 'target' });
+  else if (def.direction === 'max') ticks.push({ value: band.end, kind: 'target' });
+  else { ticks.push({ value: band.start, kind: 'bound' }, { value: band.end, kind: 'bound' }); }
+  if (def.upperLimit != null && def.upperLimit <= railMax && !ticks.some((t) => t.value === def.upperLimit)) {
+    ticks.push({ value: def.upperLimit, kind: 'upperLimit' });
+  }
+  return ticks.sort((a, b) => a.value - b.value);
 }
 
 // Whether a nutrient's target is trusted enough to ever alert on, per
@@ -304,7 +344,7 @@ export function summarizeAlerts(alerts) {
 // ---- history page: per-nutrient day status, streaks, overall stats ----
 
 // Whether a single value satisfies a nutrient's own goal — a plain boolean,
-// unlike barFill's continuous ratio, for calendar/streak purposes.
+// unlike nutrientBarModel's continuous ratio, for calendar/streak purposes.
 // direction:"none" has no goal to satisfy, so it's never "hit".
 export function nutrientHit(def, current) {
   if (current == null || def.target == null || !(def.target > 0)) return false;
@@ -313,44 +353,62 @@ export function nutrientHit(def, current) {
   return false;
 }
 
+// Whether a day's reading for a nutrient is even judgeable — a non-null,
+// positive target to judge against, and (when alertRules is supplied)
+// coverage clearing minCoveragePct. A cleared/absent target or thin
+// coverage is exactly the same "absent, not zero" situation the rest of
+// the app is careful about: it must never be silently read as a miss.
+function nutrientJudgeable(def, day, key, alertRules) {
+  if (def.target == null || !(def.target > 0)) return false;
+  if (alertRules && alertRules.minCoveragePct != null) {
+    return nutrientCoverage(day, key) >= alertRules.minCoveragePct;
+  }
+  return true;
+}
+
 // Calendar cell status for one nutrient on one day, mirroring dayStatus in
 // model.js: 'future' | 'pending' (today, nothing yet) | 'hit' | 'miss' |
-// 'empty' (no entry logged that day at all — distinct from a real miss).
-export function nutrientDayStatus(def, day, key, dateKey, today = todayKey()) {
+// 'empty' (no entry logged, no target to judge against, or coverage too
+// thin to trust — all distinct from a real miss, never conflated with one).
+export function nutrientDayStatus(def, day, key, dateKey, alertRules, today = todayKey()) {
   if (dateKey > today) return 'future';
   const current = nutrientCurrent(day, key);
-  if (current == null) return dateKey === today ? 'pending' : 'empty';
+  if (current == null || !nutrientJudgeable(def, day, key, alertRules)) {
+    return dateKey === today ? 'pending' : 'empty';
+  }
   return nutrientHit(def, current) ? 'hit' : 'miss';
 }
 
 // A day "succeeds" only if every home-tile nutrient (energy plus whichever
-// others carry display:"always") hit its own goal — missing data for any
-// of them means the day doesn't count, same as a tracker's isHit treating
-// an absent entry as not-yet-done rather than silently skipping it.
-export function allGoalsHit(nutrients, day) {
+// others carry display:"always") hit its own goal — missing data, a
+// cleared target, or coverage too thin to trust means the day doesn't
+// count, same as a tracker's isHit treating an absent entry as not-yet-done
+// rather than silently skipping it.
+export function allGoalsHit(nutrients, day, alertRules) {
   const goals = [['energy', nutrients.energy], ...alwaysNutrients(nutrients)].filter(([, def]) => def);
   if (!goals.length) return false;
-  return goals.every(([key, def]) => nutrientHit(def, nutrientCurrent(day, key)));
+  return goals.every(([key, def]) =>
+    nutrientJudgeable(def, day, key, alertRules) && nutrientHit(def, nutrientCurrent(day, key)));
 }
 
-export function nutritionCurrentStreak(nutrients, days, today = todayKey()) {
+export function nutritionCurrentStreak(nutrients, days, alertRules, today = todayKey()) {
   let d = today;
-  if (!allGoalsHit(nutrients, days[d])) d = addDays(d, -1);
+  if (!allGoalsHit(nutrients, days[d], alertRules)) d = addDays(d, -1);
   let n = 0;
-  while (allGoalsHit(nutrients, days[d])) {
+  while (allGoalsHit(nutrients, days[d], alertRules)) {
     n++;
     d = addDays(d, -1);
   }
   return n;
 }
 
-export function nutritionLongestStreak(nutrients, days, today = todayKey()) {
+export function nutritionLongestStreak(nutrients, days, alertRules, today = todayKey()) {
   const keys = Object.keys(days).filter((k) => k <= today).sort();
   if (!keys.length) return 0;
   let best = 0;
   let run = 0;
   for (let d = keys[0]; d <= today; d = addDays(d, 1)) {
-    if (allGoalsHit(nutrients, days[d])) {
+    if (allGoalsHit(nutrients, days[d], alertRules)) {
       run++;
       if (run > best) best = run;
     } else if (d !== today) {
@@ -363,9 +421,12 @@ export function nutritionLongestStreak(nutrients, days, today = todayKey()) {
 // All-time stats for the nutrition history page. A day counts as "logged"
 // if it recorded any totals at all — checked against totals rather than
 // entries, since totals (not entries) is what every other reader in this
-// module treats as the source of truth for "does this day have data".
+// module treats as the source of truth for "does this day have data". This
+// is a day-level question ("was anything logged"), not a per-nutrient one,
+// so it doesn't go through nutrientJudgeable — only goalsHitDays and the
+// streaks below do, so they agree with the calendar's per-nutrient states.
 export function nutritionStats(data, today = todayKey()) {
-  const { nutrients, days } = data;
+  const { nutrients, days, alertRules } = data;
   let loggedDays = 0;
   let goalsHitDays = 0;
   for (const key in days) {
@@ -373,12 +434,12 @@ export function nutritionStats(data, today = todayKey()) {
     const totals = days[key] && days[key].totals;
     if (!totals || !Object.keys(totals).length) continue;
     loggedDays++;
-    if (allGoalsHit(nutrients, days[key])) goalsHitDays++;
+    if (allGoalsHit(nutrients, days[key], alertRules)) goalsHitDays++;
   }
   return {
     loggedDays,
     goalsHitDays,
-    currentStreak: nutritionCurrentStreak(nutrients, days, today),
-    longestStreak: nutritionLongestStreak(nutrients, days, today),
+    currentStreak: nutritionCurrentStreak(nutrients, days, alertRules, today),
+    longestStreak: nutritionLongestStreak(nutrients, days, alertRules, today),
   };
 }

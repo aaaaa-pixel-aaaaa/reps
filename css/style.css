@@ -203,8 +203,19 @@ input, select, textarea { font: inherit; color: inherit; }
 .nutri-row-plain { flex-direction: row; align-items: center; justify-content: space-between; min-height: 0; }
 .nutri-row-plain .nutri-row-val { font-size: 13px; }
 
-/* direction glyph: a redundant, colour-independent accessibility channel */
-.nutri-glyph { color: var(--faint); font-weight: 700; flex: none; font-size: 12px; margin-right: 2px; }
+/* direction glyph: a redundant, colour-independent accessibility channel.
+   font-variant-emoji: text is belt-and-suspenders on top of the U+FE0E
+   already baked into the glyph string in js/nutrition.js — no coloured
+   emoji box, ever, and always the same secondary text colour as everything
+   around it, never an emoji font's own palette. */
+.nutri-glyph {
+  color: var(--faint);
+  font-weight: 700;
+  flex: none;
+  font-size: 12px;
+  margin-right: 2px;
+  font-variant-emoji: text;
+}
 
 .nutri-track { position: relative; height: 6px; border-radius: 999px; background: var(--raise3); overflow: hidden; }
 /* Fill must be position:absolute too (not just in-flow) so it paints above
@@ -218,24 +229,63 @@ input, select, textarea { font: inherit; color: inherit; }
   border-radius: 999px;
   transition: width 0.5s var(--spring), background-color 0.4s ease;
 }
-/* satisfied band: a section of rail one step brighter than the empty track,
-   sitting under the fill — visible ahead of the fill, covered once it's
-   reached. A hard (upperLimit) ceiling gets a low-opacity red zone past the
-   band's end instead of neutral rail, marking the danger zone before intake
-   reaches it. */
-.nutri-band {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  border-radius: 999px;
-  background: var(--raise2);
-}
+/* a hard (upperLimit) ceiling still gets a low-opacity red zone past the
+   band's end, straight on the fill's own rail — the danger zone is visible
+   before intake reaches it, whatever the fill is doing. */
 .nutri-hardzone {
   position: absolute;
   top: 0;
   bottom: 0;
   right: 0;
   background: rgba(228, 87, 61, 0.28);
+}
+
+/* white reference marks: a thin scale line 3-4px above the fill, carrying
+   an explicit tick at every meaningful bound so the goal reads independent
+   of whatever colour the fill happens to be. Ticks use the app's lightest
+   foreground token (never pure white); the faint fill between two ticks —
+   nutrientBand's own start/end — is the visible target band. */
+.nutri-ticklabels { position: relative; height: 12px; margin-bottom: 2px; }
+.nutri-ticklabel {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--dim);
+  white-space: nowrap;
+}
+/* 12px tall so a 12px tick has room to sit fully inside it (no overflow
+   clipping, no bleeding into the row's flex gaps above/below); the line
+   itself is a 2px strip vertically centred within that box via ::before. */
+.nutri-scaleline { position: relative; height: 12px; }
+.nutri-scaleline::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--raise3);
+  transform: translateY(-50%);
+}
+.nutri-scaleband {
+  position: absolute;
+  top: 50%;
+  height: 2px;
+  background: rgba(246, 239, 230, 0.15);
+  transform: translateY(-50%);
+}
+.nutri-tick {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 2px;
+  height: 12px;
+  border-radius: 1px;
+  background: var(--text);
+  transform: translate(-50%, -50%);
 }
 
 .nutri-alert-strip {
@@ -1104,7 +1154,8 @@ input[type="date"].input { line-height: 48px; }
    that are otherwise subtle low-contrast fills. */
 @media (prefers-contrast: more) {
   .nutri-track { background: var(--raise2); }
-  .nutri-band { background: var(--raise3); outline: 1px solid var(--dim); outline-offset: -1px; }
+  .nutri-scaleline::before { background: var(--raise2); }
+  .nutri-scaleband { background: rgba(246, 239, 230, 0.28); }
   .nutri-hardzone { background: rgba(228, 87, 61, 0.45); }
   .ring-band { stroke: var(--raise3); }
 }

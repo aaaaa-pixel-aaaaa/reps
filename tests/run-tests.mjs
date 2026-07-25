@@ -16,8 +16,8 @@ import {
   nutrientCurrent, nutrientCoverage, dayEntries, alwaysNutrients, groupedNutrients,
   nutrientHue, dayQualifies, computeAlerts, computeUpperLimitAlerts, computeAllAlerts,
   summarizeAlerts, directionGlyph, nutrientRailMax, nutrientBand, nutrientBarModel,
-  nutrientHit, nutrientDayStatus, allGoalsHit, nutritionCurrentStreak,
-  nutritionLongestStreak, nutritionStats,
+  nutrientTicks, TICK_PRIORITY, nutrientHit, nutrientDayStatus, allGoalsHit,
+  nutritionCurrentStreak, nutritionLongestStreak, nutritionStats,
 } from '../js/nutrition.js';
 
 let passed = 0;
@@ -627,10 +627,17 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
 
 // -- direction glyphs --
 {
-  eq(directionGlyph('min'), '↑', 'min glyph');
-  eq(directionGlyph('max'), '↓', 'max glyph');
-  eq(directionGlyph('range'), '↕', 'range glyph');
+  // Each arrow carries a trailing U+FE0E (text variation selector) so iOS
+  // renders the flat monochrome glyph instead of promoting it to a coloured
+  // emoji (the ↕️-in-a-blue-box bug). Checked by exact codepoints, not just
+  // string equality, since the selector is invisible in a diff.
+  const codepoints = (s) => [...s].map((c) => c.codePointAt(0));
+  eq(directionGlyph('min'), '↑︎', 'min glyph');
+  eq(directionGlyph('max'), '↓︎', 'max glyph');
+  eq(directionGlyph('range'), '↕︎', 'range glyph');
   eq(directionGlyph('none'), '', 'none has no glyph');
+  eq(codepoints(directionGlyph('min')), [0x2191, 0xFE0E], 'min glyph is the arrow plus the text-presentation selector');
+  eq(codepoints(directionGlyph('range')), [0x2195, 0xFE0E], 'range glyph is the arrow plus the text-presentation selector');
 }
 
 // -- schema v6: rail scale --
@@ -893,24 +900,44 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
   eq(nutrientHit(noneDef, 999), false, 'direction "none" never hits — no goal to satisfy');
 
   const today = '2026-07-20';
-  eq(nutrientDayStatus(minDef, undefined, 'protein', '2026-07-15', today), 'empty', 'no entry logged: empty, not miss');
-  eq(nutrientDayStatus(minDef, undefined, 'protein', today, today), 'pending', 'today, nothing yet: pending');
-  eq(nutrientDayStatus(minDef, undefined, 'protein', '2026-07-25', today), 'future', 'after today: future');
-  eq(nutrientDayStatus(minDef, { totals: { protein: 200 } }, 'protein', '2026-07-15', today), 'hit', 'logged and above target: hit');
-  eq(nutrientDayStatus(minDef, { totals: { protein: 50 } }, 'protein', '2026-07-15', today), 'miss', 'logged but below target: miss');
+  eq(nutrientDayStatus(minDef, undefined, 'protein', '2026-07-15', undefined, today), 'empty', 'no entry logged: empty, not miss');
+  eq(nutrientDayStatus(minDef, undefined, 'protein', today, undefined, today), 'pending', 'today, nothing yet: pending');
+  eq(nutrientDayStatus(minDef, undefined, 'protein', '2026-07-25', undefined, today), 'future', 'after today: future');
+  eq(nutrientDayStatus(minDef, { totals: { protein: 200 } }, 'protein', '2026-07-15', undefined, today), 'hit', 'logged and above target: hit');
+  eq(nutrientDayStatus(minDef, { totals: { protein: 50 } }, 'protein', '2026-07-15', undefined, today), 'miss', 'logged but below target: miss');
+
+  // Fix: a cleared/absent target must never read as a miss — it's "no
+  // data", the same absent-≠-zero rule the rest of the app follows.
+  const clearedDef = { ...minDef, target: null };
+  eq(nutrientDayStatus(clearedDef, { totals: { protein: 200 } }, 'protein', '2026-07-15', undefined, today), 'empty',
+    'target cleared (null), value logged: still "no data", never "missed"');
+  eq(nutrientDayStatus(clearedDef, { totals: { protein: 200 } }, 'protein', today, undefined, today), 'pending',
+    'target cleared, today: pending, not miss');
+
+  // Coverage below minCoveragePct is the same "no data" bucket, even with a
+  // real value and a real target.
+  const alertRules = { minCoveragePct: 80 };
+  eq(nutrientDayStatus(minDef, { totals: { protein: 200 }, coverage: { protein: 50 } }, 'protein', '2026-07-15', alertRules, today),
+    'empty', 'coverage below minCoveragePct: no data, not a miss, even though the value would otherwise fail');
+  eq(nutrientDayStatus(minDef, { totals: { protein: 200 }, coverage: { protein: 90 } }, 'protein', '2026-07-15', alertRules, today),
+    'hit', 'coverage clears minCoveragePct: judged normally');
+  eq(nutrientDayStatus(minDef, { totals: { protein: 200 } }, 'protein', '2026-07-15', alertRules, today),
+    'empty', 'no coverage recorded at all, alertRules given: reads as 0% coverage, so no data');
 
   ok(!allGoalsHit(nutrients, undefined), 'no day at all: goals not hit');
   ok(!allGoalsHit(nutrients, { totals: { energy: 3200, protein: 200 } }), 'range nutrient over target: not all goals hit');
   ok(allGoalsHit(nutrients, { totals: { energy: 3050, protein: 200 } }), 'every always-displayed nutrient satisfied: all goals hit');
   ok(!allGoalsHit(nutrients, { totals: { energy: 3050 } }), 'protein missing entirely: not all goals hit (absent never counts as met)');
+  ok(!allGoalsHit({ ...nutrients, energy: { ...nutrients.energy, target: null } }, { totals: { energy: 3050, protein: 200 } }),
+    'energy target cleared: not all goals hit (no data on one nutrient still fails the day, but see the calendar states, not "missed")');
 
   const days = {
     '2026-07-18': { totals: { energy: 3050, protein: 200 } }, // hit
     '2026-07-19': { totals: { energy: 3050, protein: 200 } }, // hit
     '2026-07-20': { totals: { energy: 3050, protein: 200 } }, // hit (today)
   };
-  eq(nutritionCurrentStreak(nutrients, days, today), 3, 'three consecutive all-goals-hit days ending today');
-  eq(nutritionLongestStreak(nutrients, days, today), 3, 'longest streak matches the current run here');
+  eq(nutritionCurrentStreak(nutrients, days, undefined, today), 3, 'three consecutive all-goals-hit days ending today');
+  eq(nutritionLongestStreak(nutrients, days, undefined, today), 3, 'longest streak matches the current run here');
 
   const gapDays = {
     '2026-07-15': { totals: { energy: 3050, protein: 200 } },
@@ -918,8 +945,8 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
     '2026-07-17': { totals: { energy: 1000, protein: 50 } }, // breaks it
     '2026-07-20': { totals: { energy: 3050, protein: 200 } },
   };
-  eq(nutritionCurrentStreak(nutrients, gapDays, today), 1, 'current streak only counts back to the most recent break');
-  eq(nutritionLongestStreak(nutrients, gapDays, today), 2, 'longest streak finds the earlier 2-day run');
+  eq(nutritionCurrentStreak(nutrients, gapDays, undefined, today), 1, 'current streak only counts back to the most recent break');
+  eq(nutritionLongestStreak(nutrients, gapDays, undefined, today), 2, 'longest streak finds the earlier 2-day run');
 
   // An empty totals object (present but nothing recorded) must not count
   // as "logged" — otherwise a day could show as logged with no data at all.
@@ -929,6 +956,60 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
   eq(stats.goalsHitDays, 3, 'goalsHitDays only counts the ones where every always-nutrient hit');
   eq(stats.currentStreak, 1, 'stats include the current streak');
   eq(stats.longestStreak, 2, 'stats include the longest streak');
+
+  // The regression this fix targets: energy's totals are logged and its
+  // OLD (target-based) hit check would have failed if target were cleared,
+  // reading as "missed" days threading through goalsHitDays/streaks too —
+  // it must instead behave exactly like "no data" for those days.
+  const clearedEnergyNutrients = { ...nutrients, energy: { ...nutrients.energy, target: null } };
+  const clearedStatsData = { nutrients: clearedEnergyNutrients, days };
+  const clearedStats = nutritionStats(clearedStatsData, today);
+  eq(clearedStats.goalsHitDays, 0, 'energy target cleared: no day can be "all goals hit" while one goal has no data');
+  eq(clearedStats.currentStreak, 0, 'energy target cleared: current streak reads 0, not a broken/negative streak');
+}
+
+// -- schema v6: white reference-mark ticks (Fix 1) --
+{
+  const round2 = (x) => Math.round(x * 100) / 100;
+  const modelOf = (def, current) => {
+    const railMax = nutrientRailMax(def, current);
+    return { railMax, band: nutrientBand(def, railMax) };
+  };
+
+  const minDef = { target: 150, direction: 'min' };
+  eq(nutrientTicks(minDef, modelOf(minDef, 75)), [{ value: 150, kind: 'target' }], 'min, no UL: one tick, at target');
+
+  const ulFar = { target: 1000, direction: 'min', upperLimit: 2500 };
+  eq(nutrientTicks(ulFar, modelOf(ulFar, 1200)), [{ value: 1000, kind: 'target' }],
+    'min w/ UL, current well under the 60% proximity threshold: UL is off-rail, no second tick');
+
+  const ulClose = { target: 1000, direction: 'min', upperLimit: 2500 };
+  eq(nutrientTicks(ulClose, modelOf(ulClose, 1600)), [{ value: 1000, kind: 'target' }, { value: 2500, kind: 'upperLimit' }],
+    'min w/ UL, current close enough to pull it on-rail: two ticks, target and upperLimit');
+
+  const maxDef = { target: 34, direction: 'max', softMax: 50 };
+  eq(nutrientTicks(maxDef, modelOf(maxDef, 20)), [{ value: 34, kind: 'target' }], 'max: one tick, at target (softMax gets no tick)');
+
+  const rangeDef = { target: 411, direction: 'range', targetMin: 349, targetMax: 504 };
+  eq(nutrientTicks(rangeDef, modelOf(rangeDef, 300)), [{ value: 349, kind: 'bound' }, { value: 504, kind: 'bound' }],
+    'range with a real AMDR band: two ticks, at targetMin and targetMax');
+
+  // Energy: no real targetMax, only softMax — nutrientBand's own fallback
+  // (target..softMax) is what gets marked, since that's the same "satisfied"
+  // zone the fill's colour law already agrees on.
+  const energyDef = { target: 3100, direction: 'range', targetMin: null, softMax: 3500 };
+  eq(nutrientTicks(energyDef, modelOf(energyDef, 3200)), [{ value: 3100, kind: 'bound' }, { value: 3500, kind: 'bound' }],
+    'energy: ticks at the band fallback (target, softMax), not a single collapsed point');
+
+  const noneDef = { target: null, direction: 'none' };
+  eq(nutrientTicks(noneDef, modelOf(noneDef, 120)), [], 'direction none: no ticks');
+
+  // Ticks are sorted by value, independent of kind — so the visual left-to-
+  // right order always matches the rail, whichever priority a tick carries.
+  eq(nutrientTicks(ulClose, modelOf(ulClose, 1600)).map((t) => t.value), [1000, 2500], 'ticks come back sorted by position');
+
+  ok(TICK_PRIORITY.target > TICK_PRIORITY.bound && TICK_PRIORITY.bound > TICK_PRIORITY.upperLimit,
+    'label priority: target beats a published bound beats a borrowed safety ceiling');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

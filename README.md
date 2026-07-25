@@ -172,6 +172,28 @@ plain count for several ("3 nutrients need attention"), upperLimit alerts
 listed first as the more serious kind. Tapping it opens the detail sheet
 scrolled to the warnings.
 
+### History calendar day states
+
+The `#/nutrition` history page's per-nutrient month calendar (and the
+`goalsHitDays`/streak counts above it) judge a day against a nutrient in
+exactly three states, computed by `nutrientDayStatus`/`allGoalsHit`
+(`js/nutrition.js`) — and they stay distinct on purpose, since collapsing
+"no data" into "missed" would blame a day for something it never had a
+chance to report:
+
+| State        | Condition |
+|--------------|-----------|
+| **goal met** | The day is logged, coverage for that nutrient clears `alertRules.minCoveragePct`, the nutrient's `target` is a real positive number, and the value satisfies it (`nutrientHit`). |
+| **missed**   | Same as above, but the value fails the direction check. |
+| **no data**  | Anything else: the day isn't logged, coverage is below `minCoveragePct`, **or the nutrient's `target` is null/absent** — for that day, that nutrient simply cannot be judged. |
+
+A cleared or null `target` can never produce "missed", regardless of what
+the logged value is — it always reads as "no data" (`'empty'`, or
+`'pending'` if it's today), the same way an unlogged day does. This is the
+absent-≠-zero rule applied one level up: not just "no value" but "no
+usable target to judge the value against" is treated as unknown, not as a
+failure.
+
 ### The scale, and the satisfied band
 
 Every nutrient bar (and, radially, the home tile's energy ring) is drawn by
@@ -197,8 +219,8 @@ clutters it — it only enters once intake actually approaches it (i.e. once
 supplements are plausibly involved). The last rule just guarantees the
 current reading never clips past the rail's own edge.
 
-Within that rail, a **satisfied band** replaces the old fixed tick marker
-at the target — a section of rail with more contrast than the empty track:
+Within that rail, `nutrientBand` (`js/nutrition.js`) computes the
+**satisfied band** — the nutrient's own meaningful bounds:
 
 ```
 "min"    band = [target, upperLimit ?? railMax]
@@ -212,13 +234,38 @@ at the target — a section of rail with more contrast than the empty track:
 anywhere from 3100 to 3500 kcal and only warming past that, rather than
 collapsing to a single point at `target`.)
 
-Where the fill ends relative to the band is the whole message: short of it
-means under, inside means satisfied, past it means over — there's no
-separate marker to read. A band whose end **is** the nutrient's own
-`upperLimit` is a *hard* ceiling: the rail beyond it is rendered in a low-
-opacity red tint, distinguishing a safety limit from an ordinary dietary
-bound without needing a legend. A soft ceiling (`targetMax`/`softMax`)
-leaves the rail past it neutral.
+That band is drawn as **explicit white reference marks**, not a shaded
+rectangle behind the fill — the goal needs to stay legible no matter what
+colour the fill happens to be doing. A thin scale line sits a few pixels
+above the fill, carrying a 2px tick (the app's lightest foreground token,
+never pure white) at every meaningful bound, each labelled with its value
+in a small dimmed numeral directly above it (the compact home-tile rows
+show the ticks without labels, when space is tight — the marks themselves
+never go missing, only the numbers might):
+
+```
+"min"           one tick, at target
+"max"           one tick, at target
+"range"         two ticks, at the band's start and end
+"none"          no ticks
+upperLimit      one more tick, but only once nutrientRailMax's own
+                proximity rule has actually pulled it onto the rail —
+                off-rail, a tick for it would point past the visible scale
+```
+
+Where two ticks bound a band, the scale-line segment between them is
+filled faintly white — that's the band, visualised as a zone instead of a
+rectangle. If two labels would crowd each other, the lower-priority one is
+dropped (never the tick itself): a nutrient's own target always outranks a
+published dietary bound, which always outranks a borrowed safety ceiling.
+
+Where the fill ends relative to that band is still the whole message: short
+of it means under, inside means satisfied, past it means over. A band whose
+end **is** the nutrient's own `upperLimit` is a *hard* ceiling: the rail
+beneath the fill is rendered in a low-opacity red tint past that point,
+distinguishing a safety limit from an ordinary dietary bound without
+needing a legend. A soft ceiling (`targetMax`/`softMax`) leaves the rail
+past it neutral.
 
 ### Colour
 

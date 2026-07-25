@@ -8,8 +8,9 @@ import {
 } from '../dates.js';
 import {
   groupedNutrients, alwaysNutrients, nutrientCurrent, nutrientCoverage,
-  dayEntries, nutrientBarModel, directionGlyph, nutrientHue, computeAllAlerts,
-  summarizeAlerts, RED_HUE, nutrientDayStatus, nutritionStats,
+  dayEntries, nutrientBarModel, nutrientTicks, TICK_PRIORITY, directionGlyph,
+  nutrientHue, computeAllAlerts, summarizeAlerts, RED_HUE, nutrientDayStatus,
+  nutritionStats,
 } from '../nutrition.js';
 import { nutritionData } from '../nutrition-store.js';
 import { h, icon, haptic, openSheet, toast, countUp, ringSVG } from '../ui.js';
@@ -69,24 +70,66 @@ function animatedFill(key, widthPct, color) {
 
 const pct = (v, railMax) => Math.max(0, Math.min(100, (v / railMax) * 100));
 
-// The rail: neutral track, the satisfied-band highlight, a red-tinted zone
-// beyond a hard (upperLimit) ceiling if there's rail past it, then the fill
-// on top — so the band reads as "still ahead" until the fill covers it, and
-// as "already inside" once it does. This one function is the only place any
-// surface draws a nutrient's track; the tile rows, sheet rows and (via
-// energyRing) the home ring's radial band all go through the same model.
+// The rail: neutral track, a red-tinted zone beyond a hard (upperLimit)
+// ceiling if there's rail past it, then the fill on top. This one function
+// is the only place any surface draws a nutrient's fill track; the tile
+// rows and sheet rows both go through it via renderNutrientBar.
 function nutriTrack(key, model, color) {
   const kids = [];
-  if (model.band && model.railMax) {
-    const left = pct(model.band.start, model.railMax);
+  if (model.band && model.railMax && model.band.hard) {
     const right = pct(model.band.end, model.railMax);
-    kids.push(h('div', { class: 'nutri-band', style: `left:${left}%;width:${Math.max(0, right - left)}%` }));
-    if (model.band.hard && right < 100) {
-      kids.push(h('div', { class: 'nutri-hardzone', style: `left:${right}%` }));
-    }
+    if (right < 100) kids.push(h('div', { class: 'nutri-hardzone', style: `left:${right}%` }));
   }
   kids.push(animatedFill(key, model.unknown ? 0 : model.fillFrac * 100, model.unknown ? 'transparent' : color));
   return h('div', { class: 'nutri-track' }, kids);
+}
+
+// White reference marks on a thin scale line above the fill — legible
+// regardless of what the fill's colour is doing. Ticks always render;
+// their numeral labels are the part that can get crowded out, so on
+// collision (a rough percentage-gap heuristic — this app doesn't measure
+// post-layout text width anywhere) the lower-priority label is dropped,
+// never the tick itself. `labels` is off for the compact home-tile rows,
+// which the spec explicitly allows to show ticks alone when space is tight.
+const MIN_LABEL_GAP_PCT = 14;
+function nutriScale(key, def, model, { labels = true } = {}) {
+  if (!model.railMax) return null;
+  const ticks = nutrientTicks(def, model);
+  if (!ticks.length) return null;
+  const railMax = model.railMax;
+  const withPct = ticks.map((t) => ({ ...t, pct: pct(t.value, railMax) }));
+
+  const kept = [];
+  for (const t of [...withPct].sort((a, b) => TICK_PRIORITY[b.kind] - TICK_PRIORITY[a.kind])) {
+    if (kept.every((k) => Math.abs(k.pct - t.pct) >= MIN_LABEL_GAP_PCT)) kept.push(t);
+  }
+  const keptValues = new Set(kept.map((t) => t.value));
+
+  // The faint band-fill only appears when two rendered ticks are exactly
+  // nutrientBand's own start/end — never inferred from "first tick, last
+  // tick", so a hypothetical third (upperLimit) tick can never stretch it
+  // past the real satisfied zone.
+  const scaleKids = [];
+  if (model.band) {
+    const startTick = withPct.find((t) => t.value === model.band.start);
+    const endTick = withPct.find((t) => t.value === model.band.end);
+    if (startTick && endTick && startTick !== endTick) {
+      scaleKids.push(h('div', {
+        class: 'nutri-scaleband',
+        style: `left:${startTick.pct}%;width:${Math.max(0, endTick.pct - startTick.pct)}%`,
+      }));
+    }
+  }
+  for (const t of withPct) scaleKids.push(h('div', { class: 'nutri-tick', style: `left:${t.pct}%` }));
+
+  const labelKids = labels
+    ? withPct.filter((t) => keptValues.has(t.value))
+      .map((t) => h('span', { class: 'nutri-ticklabel num', style: `left:${t.pct}%` }, fmtNutrient(t.value)))
+    : [];
+
+  return h('div', { class: 'nutri-scalewrap' },
+    labelKids.length ? h('div', { class: 'nutri-ticklabels' }, labelKids) : null,
+    h('div', { class: 'nutri-scaleline' }, scaleKids));
 }
 
 function glyphSpan(glyph) {
@@ -174,6 +217,7 @@ export function renderNutrientBar(key, def, current, { coverage, detail = false 
     h('div', { class: 'nutri-row-head' },
       h('span', { class: 'nutri-row-label-group' }, labelKids),
       h('span', { class: 'nutri-row-val num' }, valueText)),
+    nutriScale(key, def, model, { labels: detail }),
     nutriTrack(key, model, color));
 }
 
@@ -304,7 +348,7 @@ function nutritionCalendar(data, key, today) {
         WEEKDAYS_MIN.map((d) => h('div', { class: 'cal-dow' }, d)),
         monthGrid(m.y, m.m).flat().map((dateKey) => {
           if (!dateKey) return h('div', {});
-          const status = nutrientDayStatus(def, days[dateKey], key, dateKey, today);
+          const status = nutrientDayStatus(def, days[dateKey], key, dateKey, data.alertRules, today);
           return h('button', {
             class: `cal-cell num ${status} ${dateKey === today ? 'today' : ''}`,
             disabled: status === 'future',
