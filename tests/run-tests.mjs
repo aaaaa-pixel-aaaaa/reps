@@ -8,6 +8,8 @@ import {
   computedTarget, effectiveTarget, isHit, dayStatus, currentStreak,
   longestStreak, trackerStats, todaySummary, fmtAmount, fmtMinutes,
   habitCount, habitTarget, hitIntensity, rangeStats, periodIntensity,
+  pomodoroWorkElapsedMs, pomodoroRemainingMs, advancePomodoro, skipPomodoro,
+  POMODORO_CYCLES_FOR_LONG_BREAK,
 } from '../js/model.js';
 import { createStore, normalizeState, validateImport, seedState, demoState } from '../js/store.js';
 import { pinnedTrackers, groupTrackers, reorderContext } from '../js/model.js';
@@ -1010,6 +1012,199 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
 
   ok(TICK_PRIORITY.target > TICK_PRIORITY.bound && TICK_PRIORITY.bound > TICK_PRIORITY.upperLimit,
     'label priority: target beats a published bound beats a borrowed safety ceiling');
+}
+
+// ---------- pomodoro ----------
+
+// -- pure phase math: elapsed/remaining --
+{
+  const base = (over = {}) => ({
+    enabled: true, workMins: 25, breakMins: 5, longBreakMins: 15,
+    phase: 'work', phaseEndTimestamp: 1000000, cyclesCompleted: 0,
+    paused: false, pausedRemainingMs: null, workAccumMs: 0,
+    ...over,
+  });
+
+  // 25 min work phase, 15 min remaining (10 elapsed).
+  const midWork = base({ phaseEndTimestamp: 1000000 });
+  const now = 1000000 - 15 * 60000;
+  eq(pomodoroRemainingMs(midWork, now), 15 * 60000, 'remaining reads straight off phaseEndTimestamp - now');
+  eq(pomodoroWorkElapsedMs(midWork, now), 10 * 60000, 'work elapsed so far: duration minus remaining');
+
+  eq(pomodoroWorkElapsedMs(base({ phase: 'break', workAccumMs: 5 * 60000 }), now), 5 * 60000,
+    'on a break: elapsed is just whatever was already banked, the break itself never adds to it');
+
+  const paused = base({ paused: true, pausedRemainingMs: 8 * 60000 });
+  eq(pomodoroRemainingMs(paused, 999999999), 8 * 60000, 'paused: remaining is frozen at pausedRemainingMs, ignores now');
+  eq(pomodoroWorkElapsedMs(paused, 999999999), 17 * 60000, 'paused: elapsed is frozen too (25 - 8), ignores now');
+
+  eq(pomodoroWorkElapsedMs(null), 0, 'no pomodoro state: zero elapsed');
+  eq(pomodoroWorkElapsedMs(base({ phase: null })), 0, 'no active phase: zero elapsed');
+}
+
+// -- advancePomodoro: catch-up across one or more missed boundaries --
+{
+  const base = (over = {}) => ({
+    enabled: true, workMins: 25, breakMins: 5, longBreakMins: 15,
+    phase: 'work', phaseEndTimestamp: 1000000, cyclesCompleted: 0,
+    paused: false, pausedRemainingMs: null, workAccumMs: 0,
+    ...over,
+  });
+
+  // Just past the work phase's end: one boundary, work -> break.
+  {
+    const { pomodoro, transitions } = advancePomodoro(base(), 1000001);
+    eq(transitions, ['break'], 'one boundary crossed: work -> break');
+    eq(pomodoro.phase, 'break', 'now on break');
+    eq(pomodoro.cyclesCompleted, 1, 'the completed work phase counts as a cycle');
+    eq(pomodoro.workAccumMs, 25 * 60000, 'the whole work phase banked, none of it discarded');
+    eq(pomodoro.phaseEndTimestamp, 1000000 + 5 * 60000, 'next end anchored to the old end, not "now" (no drift on catch-up)');
+  }
+
+  // Exactly the 4th completed cycle: break upgrades to a long break.
+  {
+    const { pomodoro } = advancePomodoro(base({ cyclesCompleted: 3 }), 1000001);
+    eq(pomodoro.phase, 'longBreak', `every ${POMODORO_CYCLES_FOR_LONG_BREAK}th cycle gets the long break instead`);
+    eq(pomodoro.cyclesCompleted, 4, 'cycle count keeps climbing regardless of which break follows');
+  }
+
+  // Locked clean through an entire break and back into work: two boundaries
+  // caught up in one call, not just the first one. Work1 ends at t=0, so
+  // break spans [0, 5min] — 1ms past that lands just inside work2.
+  {
+    const p = base({ phaseEndTimestamp: 0 });
+    const now = 5 * 60000 + 1;
+    const { pomodoro, transitions } = advancePomodoro(p, now);
+    eq(transitions, ['break', 'work'], 'both boundaries crossed in one catch-up call, in order');
+    eq(pomodoro.phase, 'work', 'lands back on work, not stuck on the first missed break');
+    eq(pomodoro.cyclesCompleted, 1, 'still just one completed work cycle (the break itself never adds one)');
+  }
+
+  // A paused session is frozen — no amount of elapsed time advances it.
+  {
+    const { pomodoro, transitions } = advancePomodoro(base({ paused: true }), 999999999);
+    eq(transitions, [], 'paused: never advances');
+    eq(pomodoro.phase, 'work', 'stays exactly where it was paused');
+  }
+
+  eq(advancePomodoro(null).transitions, [], 'no pomodoro state: nothing to advance');
+}
+
+// -- skipPomodoro: user-initiated, credits partial work, never partial break --
+{
+  const base = (over = {}) => ({
+    enabled: true, workMins: 25, breakMins: 5, longBreakMins: 15,
+    phase: 'work', phaseEndTimestamp: 1000000, cyclesCompleted: 0,
+    paused: false, pausedRemainingMs: null, workAccumMs: 0,
+    ...over,
+  });
+
+  // Skipping 10 minutes into a 25-minute work phase.
+  {
+    const now = 1000000 - 15 * 60000; // 15 min remaining
+    const p = skipPomodoro(base(), now);
+    eq(p.phase, 'break', 'moves on to break');
+    eq(p.workAccumMs, 10 * 60000, 'the 10 minutes actually worked are credited, not thrown away');
+    eq(p.cyclesCompleted, 1, 'still counts toward the cycle cadence, same as a natural completion');
+    eq(p.phaseEndTimestamp, now + 5 * 60000, 'a manual skip re-anchors to "now", not the old schedule');
+  }
+
+  // Skipping a break credits nothing — breaks were never counted at all.
+  {
+    const p = skipPomodoro(base({ phase: 'break', workAccumMs: 20 * 60000, cyclesCompleted: 1 }), 500000);
+    eq(p.phase, 'work', 'back to work');
+    eq(p.workAccumMs, 20 * 60000, 'unchanged — a partial break is worth exactly as much as a full one: nothing');
+    eq(p.cyclesCompleted, 1, 'skipping a break does not itself complete a cycle');
+  }
+
+  eq(skipPomodoro(null), null, 'no pomodoro state: no-op');
+}
+
+// -- normalizeTracker: Pomodoro defaults, clamping, and scoping --
+{
+  const store = createStore({ storage: memStorage(), seed: () => seedState('2026-07-14') });
+  const timeId = store.addTracker({ name: 'Focus', type: 'counter', time: true });
+  eq(store.state.trackers[timeId].pomodoro,
+    { enabled: false, workMins: 25, breakMins: 5, longBreakMins: 15, phase: null, phaseEndTimestamp: null, cyclesCompleted: 0, paused: false, pausedRemainingMs: null, workAccumMs: 0 },
+    'a fresh time counter gets Pomodoro defaults, off by default');
+
+  const plainId = store.addTracker({ name: 'Reps', type: 'counter' });
+  eq(store.state.trackers[plainId].pomodoro, null, 'a non-time counter has no Pomodoro state at all');
+
+  const habitId = store.addTracker({ name: 'Stretch', type: 'habit' });
+  eq(store.state.trackers[habitId].pomodoro, null, 'a habit has no Pomodoro state at all');
+
+  store.updateTracker(timeId, { pomodoro: { enabled: true, workMins: 0, breakMins: -5, longBreakMins: 'x' } });
+  const p = store.state.trackers[timeId].pomodoro;
+  eq(p.enabled, true, 'enabled flag saved');
+  eq(p.workMins, 25, 'a non-positive/invalid minute value falls back to the default rather than going to 0 or NaN');
+  eq(p.breakMins, 5, 'same for a negative value');
+  eq(p.longBreakMins, 15, 'same for a non-numeric value');
+}
+
+// -- store: start/stop/cancel/skip/pause/resume/checkPomodoroPhases --
+{
+  const store = createStore({ storage: memStorage(), seed: () => seedState('2026-07-14') });
+  const tid = store.addTracker({ name: 'Focus', type: 'counter', time: true, pomodoro: { enabled: true, workMins: 25, breakMins: 5, longBreakMins: 15 } });
+
+  store.startTimer(tid);
+  ok(store.state.timers[tid], 'the plain live timer still starts as before');
+  eq(store.state.trackers[tid].pomodoro.phase, 'work', 'starting kicks off the first work phase');
+  ok(store.state.trackers[tid].pomodoro.phaseEndTimestamp > Date.now(), 'phase end is a real future timestamp, not a countdown');
+
+  // Rewind as if 10 minutes of the work phase have elapsed (same rewind
+  // trick the plain live-timer tests already use for "time passed").
+  store.state.trackers[tid].pomodoro.phaseEndTimestamp = Date.now() + 15 * 60000;
+
+  // Nothing due yet: checkPomodoroPhases is a no-op.
+  eq(store.checkPomodoroPhases(), [], 'not due yet: no phase changes reported');
+
+  // Rewind past the work phase's end entirely, then let it catch up.
+  store.state.trackers[tid].pomodoro.phaseEndTimestamp = Date.now() - 1000;
+  const changed = store.checkPomodoroPhases();
+  eq(changed.length, 1, 'exactly the one tracker whose phase changed is reported');
+  eq(changed[0].tracker.id, tid, 'the changed tracker is identified');
+  eq(changed[0].phase, 'break', 'now on a break');
+  eq(store.state.trackers[tid].pomodoro.cyclesCompleted, 1, 'cycle counted');
+
+  // Skip straight back to work.
+  store.skipPomodoroPhase(tid);
+  eq(store.state.trackers[tid].pomodoro.phase, 'work', 'skip moves on immediately');
+
+  // Pause freezes the countdown.
+  store.pausePomodoroPhase(tid);
+  ok(store.state.trackers[tid].pomodoro.paused, 'paused');
+  const frozen = store.state.trackers[tid].pomodoro.pausedRemainingMs;
+  ok(frozen > 0, 'remaining time captured at the moment of pausing');
+  eq(store.checkPomodoroPhases(), [], 'paused: never reported as due, no matter how much real time passes');
+  store.resumePomodoroPhase(tid);
+  ok(!store.state.trackers[tid].pomodoro.paused, 'resumed');
+
+  // Stop & log: work-only elapsed gets logged, and the live session
+  // (both the plain timer and the Pomodoro phase) is fully cleared.
+  store.state.trackers[tid].pomodoro.workAccumMs = 12 * 60000; // simulate 12 min already banked
+  store.state.trackers[tid].pomodoro.phaseEndTimestamp = Date.now() + 25 * 60000; // mid-phase, nothing more elapsed
+  const mins = store.stopTimer(tid, '2026-07-14');
+  eq(mins, 12, 'logs the Pomodoro work-only total (12 min), not the whole wall-clock session');
+  eq(store.state.timers[tid], undefined, 'live timer cleared');
+  eq(store.state.trackers[tid].pomodoro.phase, null, 'phase cleared back to "no session"');
+  eq(store.state.trackers[tid].pomodoro.enabled, true, 'the enabled/workMins/... settings survive stopping, only the live phase resets');
+  eq(store.state.days['2026-07-14'][tid].total, 12, 'the 12 minutes actually landed in the day log');
+
+  // Cancel discards without logging anything.
+  store.startTimer(tid);
+  store.state.trackers[tid].pomodoro.workAccumMs = 30 * 60000;
+  store.cancelTimer(tid);
+  eq(store.state.timers[tid], undefined, 'timer cleared on cancel');
+  eq(store.state.trackers[tid].pomodoro.phase, null, 'phase cleared on cancel');
+  eq(store.state.days['2026-07-14'][tid].total, 12, 'cancel logs nothing further — total unchanged from the earlier stop');
+
+  // A tracker with Pomodoro disabled behaves exactly like the plain timer.
+  const plainId = store.addTracker({ name: 'Read', type: 'counter', time: true });
+  store.startTimer(plainId);
+  eq(store.state.trackers[plainId].pomodoro.phase, null, 'Pomodoro disabled: no phase ever starts');
+  store.state.timers[plainId].startedAt = Date.now() - 42.5 * 60000;
+  eq(store.stopTimer(plainId, '2026-07-14'), 43, 'plain timer still logs the whole elapsed session, unchanged behaviour');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

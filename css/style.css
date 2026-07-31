@@ -828,7 +828,16 @@ input[type="date"].input { line-height: 48px; }
 .timer-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); animation: timerpulse 1.4s ease-in-out infinite; }
 @keyframes timerpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 .timer-live { font-size: 34px; font-weight: 800; letter-spacing: -0.02em; color: var(--c); text-shadow: 0 0 16px var(--c-40); }
+.timer-sub { font-size: 12.5px; color: var(--dim); font-weight: 600; }
 .timer-actions { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+
+/* Pomodoro: a break phase gets its own calm tint (reusing the palette's
+   teal, the same "unwind" association it already carries on Meditate-style
+   trackers) instead of the tracker's own work-phase accent, so a glance at
+   the box alone says which kind of phase it is. */
+.timerbox.pomo-break, .timerbox.pomo-longBreak { border-color: rgba(100, 181, 166, 0.4); }
+.timerbox.pomo-break .timer-dot, .timerbox.pomo-longBreak .timer-dot { background: #64B5A6; }
+.timerbox.pomo-break .timer-live, .timerbox.pomo-longBreak .timer-live { color: #64B5A6; text-shadow: 0 0 16px rgba(100, 181, 166, 0.4); }
 
 .log-actions { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
 

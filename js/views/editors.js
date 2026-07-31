@@ -5,6 +5,7 @@ import { todayKey, isValidKey } from '../dates.js';
 import { reorderContext, sortedGroups, fmtMinutes } from '../model.js';
 import { PALETTE } from '../store.js';
 import { h, icon, haptic, openSheet, confirmSheet, toast } from '../ui.js';
+import { requestPomodoroPermission } from '../pomodoro-notify.js';
 
 // ---- small form builders ----
 
@@ -170,6 +171,41 @@ export function openTrackerEditor(store, trackerId = null, presets = {}) {
             .filter((n) => isFinite(n) && n > 0).slice(0, 8);
         });
 
+        // Pomodoro settings, time counters only. f.pomodoro doesn't exist
+        // until the toggle is first switched on — created lazily here
+        // rather than pre-seeded into every non-time tracker's form model.
+        function pomodoroBox() {
+          const on = !!(f.pomodoro && f.pomodoro.enabled);
+          const numField = (label, key, fallback) => {
+            const input = h('input', {
+              class: 'input num', type: 'number', min: '1', step: '1', inputmode: 'numeric',
+            });
+            input.value = f.pomodoro[key] || fallback;
+            input.addEventListener('input', () => {
+              f.pomodoro[key] = Math.max(1, Math.round(parseFloat(input.value)) || fallback);
+            });
+            return field(label, input);
+          };
+          return h('div', {},
+            switchRow('Pomodoro mode', 'work/break intervals with a break prompt', on, (checked) => {
+              f.pomodoro = f.pomodoro || { workMins: 25, breakMins: 5, longBreakMins: 15 };
+              f.pomodoro.enabled = checked;
+              // Must run inside this click handler, not later — iOS only
+              // honours the permission prompt when it's a direct result of
+              // a user gesture, and it must never fire on its own on load.
+              if (checked) requestPomodoroPermission();
+              renderCounterFields();
+            }),
+            on ? h('div', { class: 'field-row' },
+              numField('work (min)', 'workMins', 25),
+              numField('break (min)', 'breakMins', 5),
+              numField('long break (min)', 'longBreakMins', 15),
+            ) : null,
+            on ? h('div', { class: 'hint', style: 'margin-top:-6px' },
+              'A long break replaces the usual break every 4th work cycle.') : null,
+          );
+        }
+
         // native append() stringifies null — filter it, unlike h() which skips it
         counterBox.append(...[
           field('measures', segmented([
@@ -194,6 +230,7 @@ export function openTrackerEditor(store, trackerId = null, presets = {}) {
             renderCounterFields();
             renderProg();
           }),
+          f.time ? pomodoroBox() : null,
           field(f.time ? 'quick-add chips (minutes)' : 'quick-add chips', chipsInput,
             'comma-separated amounts shown as one-tap buttons'),
           field('target progression', segmented([

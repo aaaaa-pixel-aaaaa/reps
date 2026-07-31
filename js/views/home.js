@@ -4,7 +4,7 @@
 import { todayKey, longDate, daysBetween } from '../dates.js';
 import {
   entryFor, effectiveTarget, isHit, currentStreak, fmtAmount,
-  habitCount, habitTarget,
+  habitCount, habitTarget, POMODORO_PHASE_LABEL,
   pinnedTrackers, groupTrackers, sortedGroups, todaySummary,
 } from '../model.js';
 import { h, icon, accentStyle, haptic, ringSVG, reducedMotion, openSheet } from '../ui.js';
@@ -51,6 +51,14 @@ const goHistory = (t) => (e) => {
   e.stopPropagation();
   location.hash = `t/${t.id}`;
 };
+
+// A running Pomodoro session names its current phase instead of the
+// generic label — the phase is the thing worth glancing at from Home; the
+// full countdown/cycle count lives in the log sheet.
+function timerLabel(t, plainLabel) {
+  const p = t.pomodoro && t.pomodoro.enabled ? t.pomodoro : null;
+  return p && p.phase ? (POMODORO_PHASE_LABEL[p.phase] || 'Work') : plainLabel;
+}
 
 // The face of a habit circle: a check once done (or for plain once-a-day
 // habits), a "2/5" progress count for multi habits in progress.
@@ -105,7 +113,7 @@ function counterCard(store, t, today) {
     tabindex: '0',
     onclick: () => openLogSheet(store, t.id),
   },
-    timing ? h('span', { class: 'card-timer' }, h('i', {}), 'timer') : null,
+    timing ? h('span', { class: 'card-timer' }, h('i', {}), timerLabel(t, 'timer')) : null,
     h('button', { class: 'dots', 'aria-label': `${t.name} options`, onclick: (e) => { e.stopPropagation(); openTrackerOptions(store, t.id, 'pinned'); } }, icon('dots')),
     h('div', { class: 'ringbox' }, ring,
       h('div', { class: 'ring-label' },
@@ -154,7 +162,7 @@ function trackerRow(store, t, today) {
       h('div', { class: 'trow-name' }, t.name,
         t.priority ? h('span', { class: 'trow-star', 'aria-label': 'pinned' }, icon('starFill')) : null),
       h('div', { class: `trow-sub num ${timing ? 'trow-timer' : ''}` },
-        timing ? '⏱ timer running'
+        timing ? `⏱ ${timerLabel(t, 'timer running')}`
           : streak > 0 ? `\u{1F525} ${streak} day${streak === 1 ? '' : 's'}`
           : (t.type === 'habit'
               ? (habitTarget(t, entry) > 1 ? `${habitCount(entry)} of ${habitTarget(t, entry)} today` : 'tap circle to check off')

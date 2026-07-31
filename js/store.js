@@ -3,7 +3,7 @@
 // re-normalizes touched entries, saves, and notifies subscribers.
 
 import { todayKey, isValidKey, addDays, parseKey } from './dates.js';
-import { roundAmount, isHit } from './model.js';
+import { roundAmount, isHit, pomodoroWorkElapsedMs, advancePomodoro, skipPomodoro } from './model.js';
 
 // Timestamp for a set logged against dateKey: real time for today, a
 // synthetic noon-ish time for retro days (keeps display + undo order sane).
@@ -33,6 +33,46 @@ const num = (x, fallback = 0) => (typeof x === 'number' && isFinite(x) ? x : fal
 const str = (x, fallback = '') => (typeof x === 'string' ? x : fallback);
 
 // ---- Normalization: turn possibly-partial/foreign data into a clean state ----
+
+// Pomodoro config + live phase state, bundled in one object that lives on
+// the tracker itself (like target/chips) — only time counters get one;
+// everything else is null. workMins/breakMins/longBreakMins are the
+// user's settings (persist across sessions); phase/phaseEndTimestamp/
+// cyclesCompleted/paused/pausedRemainingMs/workAccumMs are live and only
+// meaningful while phase is non-null (a session is running) — startTimer/
+// stopTimer/cancelTimer in the store below set and clear them.
+function normalizePomodoro(raw, isTimeCounter) {
+  if (!isTimeCounter) return null;
+  const src = raw && typeof raw === 'object' ? raw : {};
+  const posInt = (x, fallback) => {
+    const n = Math.round(num(x, fallback));
+    return n > 0 ? n : fallback;
+  };
+  return {
+    enabled: !!src.enabled,
+    workMins: posInt(src.workMins, 25),
+    breakMins: posInt(src.breakMins, 5),
+    longBreakMins: posInt(src.longBreakMins, 15),
+    phase: ['work', 'break', 'longBreak'].includes(src.phase) ? src.phase : null,
+    phaseEndTimestamp: isFinite(src.phaseEndTimestamp) ? src.phaseEndTimestamp : null,
+    cyclesCompleted: Math.max(0, Math.round(num(src.cyclesCompleted, 0))),
+    paused: !!src.paused,
+    pausedRemainingMs: isFinite(src.pausedRemainingMs) ? Math.max(0, src.pausedRemainingMs) : null,
+    workAccumMs: Math.max(0, num(src.workAccumMs, 0)),
+  };
+}
+
+// Ends a tracker's live Pomodoro session (stop/cancel) — clears the phase
+// bookkeeping back to "no session running" while leaving the user's
+// enabled/workMins/breakMins/longBreakMins settings untouched for next time.
+function clearPomodoroSession(t) {
+  t.pomodoro.phase = null;
+  t.pomodoro.phaseEndTimestamp = null;
+  t.pomodoro.cyclesCompleted = 0;
+  t.pomodoro.paused = false;
+  t.pomodoro.pausedRemainingMs = null;
+  t.pomodoro.workAccumMs = 0;
+}
 
 function normalizeTracker(raw, i) {
   if (!raw || typeof raw !== 'object') return null;
@@ -64,8 +104,10 @@ function normalizeTracker(raw, i) {
     t.chips = Array.isArray(raw.chips)
       ? raw.chips.map((c) => num(c, NaN)).filter((c) => isFinite(c) && c > 0).slice(0, 8)
       : [];
+    t.pomodoro = normalizePomodoro(raw.pomodoro, t.time);
   } else {
     t.perDay = Math.max(1, Math.round(num(raw.perDay, 1)));
+    t.pomodoro = null;
   }
   return t;
 }
@@ -586,22 +628,40 @@ export function createStore({ storage, key = STORAGE_KEY, seed = seedState } = {
     // Live timer for a time counter. Only one runs per tracker at a time;
     // the tracker id maps straight to a start timestamp, so it needs no
     // interval anywhere — closing the app, locking the phone, or a service
-    // worker restart can't lose it, only clearing storage can.
+    // worker restart can't lose it, only clearing storage can. When the
+    // tracker has Pomodoro mode on, this also kicks off its first work
+    // phase — one Start button covers both the plain and Pomodoro cases.
     startTimer(tid) {
       const t = tracker(tid);
       if (!t || t.type !== 'counter' || !t.time || state.timers[tid]) return;
       state.timers[tid] = { startedAt: Date.now() };
+      if (t.pomodoro && t.pomodoro.enabled) {
+        t.pomodoro.phase = 'work';
+        t.pomodoro.phaseEndTimestamp = Date.now() + t.pomodoro.workMins * 60000;
+        t.pomodoro.cyclesCompleted = 0;
+        t.pomodoro.paused = false;
+        t.pomodoro.pausedRemainingMs = null;
+        t.pomodoro.workAccumMs = 0;
+      }
       commit();
     },
-    // Stops a running timer and logs the whole elapsed minutes against
-    // dateKey (today, unless the caller is closing out a session that ran
-    // past midnight). Returns the minutes logged, or null if none was running.
+    // Stops a running timer and logs the elapsed minutes against dateKey
+    // (today, unless the caller is closing out a session that ran past
+    // midnight). Returns the minutes logged, or null if none was running.
+    // A Pomodoro session logs work-only time (pomodoroWorkElapsedMs) — the
+    // whole point of phases is that breaks don't count toward the total.
     stopTimer(tid, dateKey = todayKey()) {
       const running = state.timers[tid];
       if (!running) return null;
       delete state.timers[tid];
       const t = tracker(tid);
-      const mins = Math.round((Date.now() - running.startedAt) / 60000);
+      let mins;
+      if (t && t.pomodoro && t.pomodoro.phase) {
+        mins = Math.round(pomodoroWorkElapsedMs(t.pomodoro) / 60000);
+        clearPomodoroSession(t);
+      } else {
+        mins = Math.round((Date.now() - running.startedAt) / 60000);
+      }
       if (t && mins > 0) {
         const entry = dayEntry(dateKey, tid, true);
         entry.sets.push({ a: mins, t: Date.now() });
@@ -615,7 +675,52 @@ export function createStore({ storage, key = STORAGE_KEY, seed = seedState } = {
     cancelTimer(tid) {
       if (!state.timers[tid]) return;
       delete state.timers[tid];
+      const t = tracker(tid);
+      if (t && t.pomodoro) clearPomodoroSession(t);
       commit();
+    },
+    // Ends the current phase early — see skipPomodoro's own comment for
+    // what happens to partial work-phase progress.
+    skipPomodoroPhase(tid) {
+      const t = tracker(tid);
+      if (!t || !t.pomodoro || !t.pomodoro.phase) return;
+      t.pomodoro = skipPomodoro(t.pomodoro);
+      commit();
+    },
+    pausePomodoroPhase(tid) {
+      const t = tracker(tid);
+      if (!t || !t.pomodoro || !t.pomodoro.phase || t.pomodoro.paused) return;
+      t.pomodoro.pausedRemainingMs = Math.max(0, t.pomodoro.phaseEndTimestamp - Date.now());
+      t.pomodoro.paused = true;
+      commit();
+    },
+    resumePomodoroPhase(tid) {
+      const t = tracker(tid);
+      if (!t || !t.pomodoro || !t.pomodoro.paused) return;
+      t.pomodoro.phaseEndTimestamp = Date.now() + (t.pomodoro.pausedRemainingMs || 0);
+      t.pomodoro.paused = false;
+      t.pomodoro.pausedRemainingMs = null;
+      commit();
+    },
+    // Catches up any Pomodoro phase(s) that elapsed while the app wasn't
+    // running the interval that normally repaints the countdown (screen
+    // locked, tab backgrounded, or just not loaded yet) — called on load
+    // and on visibilitychange becoming visible. Returns the trackers whose
+    // phase just changed (each with its now-current phase), so the caller
+    // can fire one notification per tracker; a no-op run touches nothing
+    // and never commits.
+    checkPomodoroPhases() {
+      const changed = [];
+      for (const t of Object.values(state.trackers)) {
+        if (!t.pomodoro || !t.pomodoro.phase || t.pomodoro.paused) continue;
+        const { pomodoro, transitions } = advancePomodoro(t.pomodoro);
+        if (transitions.length) {
+          t.pomodoro = pomodoro;
+          changed.push({ tracker: t, phase: transitions[transitions.length - 1] });
+        }
+      }
+      if (changed.length) commit();
+      return changed;
     },
     setGoalOverride(tid, dateKey, value) {
       const t = tracker(tid);

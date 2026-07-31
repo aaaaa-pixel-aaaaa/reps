@@ -241,6 +241,108 @@ export function periodIntensity(achieved, targetSum, lowerMult, upperMult) {
   return (ratio - lowerMult) / (upperMult - lowerMult);
 }
 
+// ---- Pomodoro ----
+// Rides on top of the plain live timer (state.timers[tid].startedAt still
+// owns "is a session running"): this just overlays phase boundaries on top,
+// computed from stored timestamps rather than ticked down, so a locked
+// phone can never drift or stall it — every value here is re-derived fresh
+// from Date.now() and the persisted schedule, never accumulated tick by
+// tick. Pure data in, data out; store.js owns persistence, the views own
+// display and the setInterval that repaints them (see log-sheet.js).
+
+export const POMODORO_CYCLES_FOR_LONG_BREAK = 4;
+export const POMODORO_PHASE_LABEL = { work: 'Work', break: 'Break', longBreak: 'Long break' };
+
+function pomodoroPhaseDurationMs(p, phase) {
+  if (phase === 'work') return p.workMins * 60000;
+  if (phase === 'longBreak') return p.longBreakMins * 60000;
+  return p.breakMins * 60000;
+}
+
+// Work phase -> break (long break every POMODORO_CYCLES_FOR_LONG_BREAK-th
+// cycle); anything else (break or long break) -> back to work.
+function nextPomodoroPhase(p) {
+  if (p.phase === 'work') {
+    return p.cyclesCompleted > 0 && p.cyclesCompleted % POMODORO_CYCLES_FOR_LONG_BREAK === 0
+      ? 'longBreak' : 'break';
+  }
+  return 'work';
+}
+
+// Work-only elapsed for a running session, in ms — breaks are excluded
+// from the tracker's total by design (see the Pomodoro feature notes):
+// only completed work phases (workAccumMs) plus, if currently in a work
+// phase, however much of it has elapsed so far. Paused freezes that at
+// pausedRemainingMs rather than reading the (stale) live clock.
+export function pomodoroWorkElapsedMs(p, now = Date.now()) {
+  if (!p || !p.phase) return 0;
+  let extra = 0;
+  if (p.phase === 'work') {
+    const durationMs = pomodoroPhaseDurationMs(p, 'work');
+    const remaining = p.paused ? (p.pausedRemainingMs || 0) : Math.max(0, p.phaseEndTimestamp - now);
+    extra = Math.max(0, durationMs - Math.max(0, remaining));
+  }
+  return (p.workAccumMs || 0) + extra;
+}
+
+// Time left in the current phase, ms (never negative) — 0 means a phase
+// boundary has been reached but not yet advanced (advancePomodoro's job).
+export function pomodoroRemainingMs(p, now = Date.now()) {
+  if (!p || !p.phase) return 0;
+  if (p.paused) return p.pausedRemainingMs || 0;
+  return Math.max(0, p.phaseEndTimestamp - now);
+}
+
+// Advances a session's phase as many times as elapsed real time demands —
+// a phone locked through more than one boundary catches up fully in one
+// call, rather than getting stuck on the first missed phase. Each new
+// phase's end is anchored to the *previous* end plus its own duration
+// (not "now" + duration), so a catch-up run doesn't drift the schedule
+// forward. A paused session never advances. Returns the possibly-updated
+// pomodoro state plus the ordered list of phases transitioned into (the
+// last entry is the phase that's current now).
+export function advancePomodoro(p, now = Date.now()) {
+  if (!p || !p.phase || p.paused) return { pomodoro: p, transitions: [] };
+  const cur = { ...p };
+  const transitions = [];
+  let guard = 0;
+  while (cur.phaseEndTimestamp != null && now >= cur.phaseEndTimestamp && guard++ < 1000) {
+    if (cur.phase === 'work') {
+      cur.workAccumMs = (cur.workAccumMs || 0) + pomodoroPhaseDurationMs(cur, 'work');
+      cur.cyclesCompleted += 1;
+    }
+    const next = nextPomodoroPhase(cur);
+    cur.phaseEndTimestamp += pomodoroPhaseDurationMs(cur, next);
+    cur.phase = next;
+    transitions.push(next);
+  }
+  return { pomodoro: cur, transitions };
+}
+
+// A user-initiated skip: ends the current phase right now rather than
+// waiting for it to elapse. A work phase skipped early still credits
+// whatever of it was completed (progress isn't thrown away) and still
+// counts toward the long-break cadence; a break skipped early credits
+// nothing, since breaks were never counted. The new phase is anchored to
+// "now", not the old schedule — a manual skip is a deliberate reset of
+// the cadence, unlike a catch-up.
+export function skipPomodoro(p, now = Date.now()) {
+  if (!p || !p.phase) return p;
+  const cur = { ...p };
+  if (cur.phase === 'work') {
+    const durationMs = pomodoroPhaseDurationMs(cur, 'work');
+    const remaining = cur.paused ? (cur.pausedRemainingMs || 0) : Math.max(0, cur.phaseEndTimestamp - now);
+    cur.workAccumMs = (cur.workAccumMs || 0) + Math.max(0, durationMs - remaining);
+    cur.cyclesCompleted += 1;
+  }
+  const next = nextPomodoroPhase(cur);
+  cur.phase = next;
+  cur.phaseEndTimestamp = now + pomodoroPhaseDurationMs(cur, next);
+  cur.paused = false;
+  cur.pausedRemainingMs = null;
+  return cur;
+}
+
 // ---- Sorting helpers shared by views and reorder mutations ----
 
 const byOrder = (a, b) => (a.order - b.order) || String(a.id).localeCompare(String(b.id));

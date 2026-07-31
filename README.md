@@ -28,6 +28,10 @@ Add-to-Home-Screen app.
   summarises today's energy and macros against an externally-maintained diet
   target file, colour-coded and with a warnings strip when a nutrient's been
   off for several days. See [Nutrition](#nutrition) below.
+- **Time counters** can track live via a start/stop timer instead of typing
+  a number in after the fact, and optionally run that timer as a **Pomodoro**
+  — work/break phases, a long break every 4th cycle, and a system
+  notification when one ends. See [Pomodoro mode](#pomodoro-mode) below.
 
 Data lives in `localStorage` under a single key (`reps_v1`), saved on every
 change. `?demo=1` opens a separate throwaway dataset with weeks of generated
@@ -304,6 +308,63 @@ treats them very differently:
   it fires its own, more serious alert **immediately** on a single
   qualifying day, not after a run of several — see Alert rules above.
 
+## Pomodoro mode
+
+An optional overlay on top of the existing live timer for any time-based
+counter (edit the tracker → measures: **Time**). Off by default; a plain
+time counter behaves exactly as it always has. Toggling it on offers
+work/break lengths (default 25/5 minutes) and a long-break length (default
+15) — a long break replaces the usual one every 4th work cycle.
+
+### The timer keeps accumulating, Pomodoro just overlays phases
+
+Starting a Pomodoro-enabled tracker starts the same live timer every time
+counter already has (`state.timers[tid]`) *and* a work phase. Only work
+phases count toward the total that eventually gets logged — a break's
+minutes are excluded on purpose, so a 25-minute work block followed by a
+5-minute break and logged mid-break reads as 25, not 30. The log sheet
+shows both: the current phase and time remaining in it (the primary,
+large number), and the accumulated work-only total underneath (the same
+"existing elapsed display" a plain timer always showed). Skip moves to the
+next phase immediately, crediting whatever of a work phase was actually
+completed rather than discarding it; Pause freezes the countdown in place.
+
+### No ticking countdowns — timestamps only
+
+Phases are never counted down with `setInterval` — iOS suspends JS when
+the screen locks, so a tick-based countdown drifts or simply stops. Instead,
+starting a phase stores `phaseEndTimestamp` (an absolute epoch-ms value),
+and remaining time is always `phaseEndTimestamp - Date.now()`, recomputed
+fresh wherever it's shown — including in the once-a-second repaint that
+keeps the open log sheet's numbers moving, which recomputes rather than
+decrements, so a missed tick (tab backgrounded for a few seconds) never
+causes drift. On top of that, the app checks `Date.now() >= phaseEndTimestamp`
+on load and on `visibilitychange` becoming visible, catching up — possibly
+through more than one missed phase boundary at once — whatever elapsed
+while the phone was locked or the app wasn't running at all.
+
+### Notifications
+
+Turning Pomodoro mode on for the first time requests Notification
+permission, inside that same tap (iOS only honours the prompt as a direct
+result of a user gesture — it's never requested on page load). A denied or
+unsupported permission falls back to an in-app chime alone; a phase change
+always chimes, whether or not the system notification also fires. The
+notification itself goes through the service worker registration
+(`reg.showNotification(...)`), not `new Notification()` — on an iOS
+home-screen PWA, only the former produces a real lock-screen / notification
+-centre entry. Each tracker uses its own `tag` so a new phase change
+replaces its predecessor instead of stacking; tapping the notification
+focuses the app if it's already open (the service worker hands the tracker
+id back via `postMessage`, since it can't touch `location.hash` itself) or
+opens a fresh window at that tracker's history otherwise.
+
+**Known limitation, accepted rather than worked around**: a notification
+can't fire *while* the phone is locked mid-phase — it (and the phase
+change it announces) appears the moment the app next resumes, not at the
+scheduled instant. Exact on-time delivery while backgrounded would need
+Web Push and a server; that's out of scope for a static, backend-free PWA.
+
 ## Development
 
 Serve statically (any server) and open:
@@ -313,7 +374,7 @@ python -m http.server 8000       # or: npx http-server
 ```
 
 Run the unit tests (date math, streaks, store mutations, wheel math,
-nutrition bar-fill/alert math):
+nutrition bar-fill/alert math, Pomodoro phase math):
 
 ```
 node tests/run-tests.mjs

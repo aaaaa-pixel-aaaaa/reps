@@ -7,6 +7,7 @@ import { renderHistory } from './views/history.js';
 import { h } from './ui.js';
 import { refreshNutrition, subscribeNutrition, nutritionData } from './nutrition-store.js';
 import { renderNutritionHistory } from './views/nutrition.js';
+import { checkAndNotifyPomodoro } from './pomodoro.js';
 
 const params = new URLSearchParams(location.search);
 const demo = params.get('demo') === '1';
@@ -75,16 +76,31 @@ window.addEventListener('hashchange', render);
 // Re-render when the app resumes on a new day (iOS keeps PWAs suspended for
 // ages; "today" must not go stale). Also re-fetch nutrition.json here —
 // it's maintained outside the app, so reopening from the home screen is
-// the natural moment to pick up edits made elsewhere.
+// the natural moment to pick up edits made elsewhere — and catch up any
+// Pomodoro phase(s) that elapsed while suspended (a locked phone gets no
+// setInterval ticks, so this is the moment that catch-up has to happen).
 let lastRenderDay = new Date().getDate();
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) return;
   refreshNutrition();
+  checkAndNotifyPomodoro(store);
   if (new Date().getDate() !== lastRenderDay) {
     lastRenderDay = new Date().getDate();
     render();
   }
 });
 
+// A notification's own click is handled by the service worker (it owns
+// focusing/opening the window), which then hands the tracker id back here
+// via postMessage so the already-open app can navigate to it.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    if (e.data && e.data.type === 'pomodoro-notification-click' && e.data.trackerId) {
+      navigate(`t/${e.data.trackerId}`);
+    }
+  });
+}
+
 refreshNutrition();
+checkAndNotifyPomodoro(store);
 render();

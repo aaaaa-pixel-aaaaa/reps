@@ -4,11 +4,25 @@
 // survives every log.
 
 import { todayKey, shortDate } from '../dates.js';
-import { entryFor, effectiveTarget, isHit, currentStreak, fmtAmount, roundAmount } from '../model.js';
+import {
+  entryFor, effectiveTarget, isHit, currentStreak, fmtAmount, roundAmount,
+  pomodoroWorkElapsedMs, pomodoroRemainingMs, POMODORO_PHASE_LABEL,
+} from '../model.js';
 import { stampFor } from '../store.js';
 import { h, icon, haptic, openSheet, toast, countUp, reducedMotion } from '../ui.js';
 import { createWheel } from '../wheel.js';
 import { openDayEditor } from './day-editor.js';
+import { checkAndNotifyPomodoro } from '../pomodoro.js';
+
+function fmtClock(totalSecs) {
+  const secs = Math.max(0, Math.round(totalSecs));
+  const hh = Math.floor(secs / 3600);
+  const mm = Math.floor((secs % 3600) / 60);
+  const ss = secs % 60;
+  return hh > 0
+    ? `${hh}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`
+    : `${mm}:${String(ss).padStart(2, '0')}`;
+}
 
 export function openLogSheet(store, trackerId, dateKey = todayKey()) {
   const t = store.state.trackers[trackerId];
@@ -50,20 +64,81 @@ export function openLogSheet(store, trackerId, dateKey = todayKey()) {
       // elapsed time is just Date.now() minus the stored start, re-read
       // whenever the sheet repaints.
       const timerBox = t.time && isToday ? h('div', { class: 'timerbox' }) : null;
+      const stopAndLog = () => {
+        const mins = store.stopTimer(t.id, dateKey);
+        haptic(18);
+        if (mins) toast(`Logged ${fmt(mins)}`);
+      };
+      const cancelRunning = () => { store.cancelTimer(t.id); haptic(8); };
+
+      function paintPomodoro(pomo) {
+        const phaseLabel = POMODORO_PHASE_LABEL[pomo.phase] || 'Work';
+        const remainEl = h('div', { class: 'timer-live num' }, '0:00');
+        const cyclesEl = h('span', {}, '');
+        const totalEl2 = h('span', { class: 'num' }, '0:00');
+
+        const tick = () => {
+          // Re-read fresh each tick rather than closing over the pomo
+          // snapshot — a phase change (from here or elsewhere) replaces it.
+          const fresh = store.state.trackers[t.id];
+          if (!fresh || !fresh.pomodoro || !fresh.pomodoro.phase || !store.state.timers[t.id]) return;
+          const p = fresh.pomodoro;
+          if (!p.paused && pomodoroRemainingMs(p) <= 0) {
+            // Due: hand off to the store-driven catch-up, which commits and
+            // triggers this sheet's own update()/paintTimer() to repaint
+            // fresh (new phase, new interval) — nothing left to do here.
+            checkAndNotifyPomodoro(store);
+            return;
+          }
+          remainEl.textContent = fmtClock(pomodoroRemainingMs(p) / 1000);
+          totalEl2.textContent = fmtClock(pomodoroWorkElapsedMs(p) / 1000);
+          cyclesEl.textContent = `${p.cyclesCompleted} cycle${p.cyclesCompleted === 1 ? '' : 's'} completed`;
+        };
+        tick();
+        timerTick = setInterval(tick, 1000);
+
+        timerBox.className = `timerbox running pomo-${pomo.phase}`;
+        timerBox.replaceChildren(
+          h('div', { class: 'timer-lbl' },
+            h('span', { class: 'timer-dot' }),
+            `${phaseLabel}${pomo.paused ? ' · paused' : ''}`),
+          remainEl,
+          h('div', { class: 'timer-sub' }, cyclesEl),
+          h('div', { class: 'timer-sub' }, 'worked so far ', totalEl2),
+          h('div', { class: 'timer-actions' },
+            h('div', { class: 'btn-row' },
+              h('button', {
+                class: 'btn btn-ghost',
+                onclick: () => {
+                  if (store.state.trackers[t.id].pomodoro.paused) store.resumePomodoroPhase(t.id);
+                  else store.pausePomodoroPhase(t.id);
+                  haptic(10);
+                },
+              }, pomo.paused ? 'Resume' : 'Pause'),
+              h('button', {
+                class: 'btn btn-ghost',
+                onclick: () => { store.skipPomodoroPhase(t.id); haptic(10); },
+              }, 'Skip phase'),
+            ),
+            h('button', { class: 'btn btn-accent', onclick: stopAndLog }, 'Stop & log'),
+            h('button', { class: 'linklike', onclick: cancelRunning }, 'Cancel — discard'),
+          ),
+        );
+      }
+
       function paintTimer() {
         if (!timerBox) return;
         if (timerTick) { clearInterval(timerTick); timerTick = null; }
         const running = store.state.timers[t.id];
-        if (running) {
+        const pomo = t.pomodoro && t.pomodoro.enabled && t.pomodoro.phase ? t.pomodoro : null;
+
+        if (running && pomo) {
+          paintPomodoro(pomo);
+        } else if (running) {
           const live = h('div', { class: 'timer-live num' }, '0:00');
           const tick = () => {
             const secs = Math.max(0, Math.floor((Date.now() - running.startedAt) / 1000));
-            const hh = Math.floor(secs / 3600);
-            const mm = Math.floor((secs % 3600) / 60);
-            const ss = secs % 60;
-            live.textContent = hh > 0
-              ? `${hh}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`
-              : `${mm}:${String(ss).padStart(2, '0')}`;
+            live.textContent = fmtClock(secs);
           };
           tick();
           timerTick = setInterval(tick, 1000);
@@ -72,18 +147,8 @@ export function openLogSheet(store, trackerId, dateKey = todayKey()) {
             h('div', { class: 'timer-lbl' }, h('span', { class: 'timer-dot' }), 'timer running'),
             live,
             h('div', { class: 'timer-actions' },
-              h('button', {
-                class: 'btn btn-accent',
-                onclick: () => {
-                  const mins = store.stopTimer(t.id, dateKey);
-                  haptic(18);
-                  if (mins) toast(`Logged ${fmt(mins)}`);
-                },
-              }, 'Stop & log'),
-              h('button', {
-                class: 'linklike',
-                onclick: () => { store.cancelTimer(t.id); haptic(8); },
-              }, 'Cancel — discard'),
+              h('button', { class: 'btn btn-accent', onclick: stopAndLog }, 'Stop & log'),
+              h('button', { class: 'linklike', onclick: cancelRunning }, 'Cancel — discard'),
             ),
           );
         } else {
@@ -93,7 +158,7 @@ export function openLogSheet(store, trackerId, dateKey = todayKey()) {
             h('button', {
               class: 'btn btn-ghost',
               onclick: () => { store.startTimer(t.id); haptic(12); },
-            }, 'Start timer'),
+            }, t.pomodoro && t.pomodoro.enabled ? 'Start Pomodoro' : 'Start timer'),
           );
         }
       }
