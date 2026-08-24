@@ -192,6 +192,7 @@ export function normalizeState(raw) {
   state.meta = {
     lastBackup: isValidKey(metaSrc.lastBackup) ? metaSrc.lastBackup : null,
     createdAt: isValidKey(metaSrc.createdAt) ? metaSrc.createdAt : todayKey(),
+    nutritionHidden: !!metaSrc.nutritionHidden,
   };
 
   // Live timers: a plain timestamp per tracker. Surviving a reload/backgrounded
@@ -741,6 +742,10 @@ export function createStore({ storage, key = STORAGE_KEY, seed = seedState } = {
     },
     markBackedUp(dateKey = todayKey()) {
       state.meta.lastBackup = dateKey;
+      commit();
+    },
+    setNutritionHidden(hidden) {
+      state.meta.nutritionHidden = !!hidden;
       commit();
     },
     replaceAll(data) {

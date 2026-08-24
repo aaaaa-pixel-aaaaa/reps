@@ -223,7 +223,28 @@ export function renderNutrientBar(key, def, current, { coverage, detail = false 
 
 // ---- home tile ----
 
-export function renderNutritionTile() {
+export function nutritionAvailable() {
+  const data = nutritionData();
+  return !!(data && data.nutrients && data.nutrients.energy);
+}
+
+function openNutritionOptions(store) {
+  openSheet({
+    title: 'Nutrition',
+    build(body, api) {
+      body.append(h('div', { class: 'opt-list' },
+        h('button', { class: 'opt danger', onclick: () => {
+          api.close();
+          store.setNutritionHidden(true);
+          haptic(10);
+          toast('Nutrition card hidden — add it back from New tracker');
+        } }, icon('trash'), h('span', { class: 'grow' }, 'Delete')),
+      ));
+    },
+  });
+}
+
+export function renderNutritionTile(store) {
   const data = nutritionData();
   if (!data || !data.nutrients || !data.nutrients.energy) return null;
   const today = todayKey();
@@ -245,9 +266,13 @@ export function renderNutritionTile() {
     onclick: () => openNutritionSheet(today),
   },
     h('button', {
-      class: 'dots', 'aria-label': 'Nutrition history & stats',
+      class: 'cal-btn', 'aria-label': 'Nutrition history & stats',
       onclick: (e) => { e.stopPropagation(); location.hash = 'nutrition'; },
     }, icon('cal')),
+    h('button', {
+      class: 'dots', 'aria-label': 'Nutrition options',
+      onclick: (e) => { e.stopPropagation(); openNutritionOptions(store); },
+    }, icon('dots')),
     h('div', { class: 'nutri-main' },
       h('div', { class: 'nutri-energy' },
         h('div', { class: 'ringbox' }, energyRing(model, color),

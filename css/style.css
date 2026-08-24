@@ -149,6 +149,19 @@ input, select, textarea { font: inherit; color: inherit; }
 }
 .card .dots:active { background: var(--raise2); color: var(--text); }
 
+.card .cal-btn {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: var(--faint);
+}
+.card .cal-btn:active { background: var(--raise2); color: var(--text); }
+
 .card-timer {
   position: absolute;
   top: 10px;
