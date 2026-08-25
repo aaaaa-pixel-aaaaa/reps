@@ -53,6 +53,7 @@ function normalizePomodoro(raw, isTimeCounter) {
     workMins: posInt(src.workMins, 25),
     breakMins: posInt(src.breakMins, 5),
     longBreakMins: posInt(src.longBreakMins, 15),
+    cyclesPerLongBreak: posInt(src.cyclesPerLongBreak, 4),
     phase: ['work', 'break', 'longBreak'].includes(src.phase) ? src.phase : null,
     phaseEndTimestamp: isFinite(src.phaseEndTimestamp) ? src.phaseEndTimestamp : null,
     cyclesCompleted: Math.max(0, Math.round(num(src.cyclesCompleted, 0))),

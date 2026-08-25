@@ -186,9 +186,22 @@ export function openTrackerEditor(store, trackerId = null, presets = {}) {
             });
             return field(label, input);
           };
+          const hintText = () =>
+            `A long break replaces the usual break every ${(f.pomodoro && f.pomodoro.cyclesPerLongBreak) || 4}th work cycle.`;
+          const cyclesInput = on ? h('input', {
+            class: 'input num', type: 'number', min: '1', step: '1', inputmode: 'numeric',
+          }) : null;
+          if (on) {
+            cyclesInput.value = f.pomodoro.cyclesPerLongBreak || 4;
+            cyclesInput.addEventListener('input', () => {
+              f.pomodoro.cyclesPerLongBreak = Math.max(1, Math.round(parseFloat(cyclesInput.value)) || 4);
+              hint.textContent = hintText();
+            });
+          }
+          const hint = h('div', { class: 'hint', style: 'margin-top:-6px' }, hintText());
           return h('div', {},
             switchRow('Pomodoro mode', 'work/break intervals with a break prompt', on, (checked) => {
-              f.pomodoro = f.pomodoro || { workMins: 25, breakMins: 5, longBreakMins: 15 };
+              f.pomodoro = f.pomodoro || { workMins: 25, breakMins: 5, longBreakMins: 15, cyclesPerLongBreak: 4 };
               f.pomodoro.enabled = checked;
               // Must run inside this click handler, not later — iOS only
               // honours the permission prompt when it's a direct result of
@@ -201,8 +214,8 @@ export function openTrackerEditor(store, trackerId = null, presets = {}) {
               numField('break (min)', 'breakMins', 5),
               numField('long break (min)', 'longBreakMins', 15),
             ) : null,
-            on ? h('div', { class: 'hint', style: 'margin-top:-6px' },
-              'A long break replaces the usual break every 4th work cycle.') : null,
+            on ? field('long break every (cycles)', cyclesInput) : null,
+            on ? hint : null,
           );
         }
 

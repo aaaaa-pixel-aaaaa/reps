@@ -30,8 +30,8 @@ Add-to-Home-Screen app.
   off for several days. See [Nutrition](#nutrition) below.
 - **Time counters** can track live via a start/stop timer instead of typing
   a number in after the fact, and optionally run that timer as a **Pomodoro**
-  — work/break phases, a long break every 4th cycle, and a system
-  notification when one ends. See [Pomodoro mode](#pomodoro-mode) below.
+  — work/break phases, a long break every Nth cycle (configurable), and a
+  system notification when one ends. See [Pomodoro mode](#pomodoro-mode) below.
 
 Data lives in `localStorage` under a single key (`reps_v1`), saved on every
 change. `?demo=1` opens a separate throwaway dataset with weeks of generated
@@ -313,8 +313,9 @@ treats them very differently:
 An optional overlay on top of the existing live timer for any time-based
 counter (edit the tracker → measures: **Time**). Off by default; a plain
 time counter behaves exactly as it always has. Toggling it on offers
-work/break lengths (default 25/5 minutes) and a long-break length (default
-15) — a long break replaces the usual one every 4th work cycle.
+work/break lengths (default 25/5 minutes), a long-break length (default
+15), and how often the long break kicks in (default every 4th work cycle,
+adjustable per tracker).
 
 ### The timer keeps accumulating, Pomodoro just overlays phases
 

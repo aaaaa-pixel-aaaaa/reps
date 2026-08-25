@@ -9,7 +9,7 @@ import {
   longestStreak, trackerStats, todaySummary, fmtAmount, fmtMinutes,
   habitCount, habitTarget, hitIntensity, rangeStats, periodIntensity,
   pomodoroWorkElapsedMs, pomodoroRemainingMs, advancePomodoro, skipPomodoro,
-  POMODORO_CYCLES_FOR_LONG_BREAK,
+  DEFAULT_POMODORO_CYCLES_FOR_LONG_BREAK,
 } from '../js/model.js';
 import { createStore, normalizeState, validateImport, seedState, demoState } from '../js/store.js';
 import { pinnedTrackers, groupTrackers, reorderContext } from '../js/model.js';
@@ -1064,8 +1064,17 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
   // Exactly the 4th completed cycle: break upgrades to a long break.
   {
     const { pomodoro } = advancePomodoro(base({ cyclesCompleted: 3 }), 1000001);
-    eq(pomodoro.phase, 'longBreak', `every ${POMODORO_CYCLES_FOR_LONG_BREAK}th cycle gets the long break instead`);
+    eq(pomodoro.phase, 'longBreak', `every ${DEFAULT_POMODORO_CYCLES_FOR_LONG_BREAK}th cycle gets the long break instead`);
     eq(pomodoro.cyclesCompleted, 4, 'cycle count keeps climbing regardless of which break follows');
+  }
+
+  // A custom cadence (cyclesPerLongBreak) is honoured instead of the default.
+  {
+    const short = advancePomodoro(base({ cyclesCompleted: 1, cyclesPerLongBreak: 2 }), 1000001).pomodoro;
+    eq(short.phase, 'longBreak', 'a cyclesPerLongBreak of 2 triggers the long break on the 2nd cycle');
+
+    const notYet = advancePomodoro(base({ cyclesCompleted: 3, cyclesPerLongBreak: 8 }), 1000001).pomodoro;
+    eq(notYet.phase, 'break', 'a cyclesPerLongBreak of 8 keeps giving plain breaks before the 8th cycle');
   }
 
   // Locked clean through an entire break and back into work: two boundaries
@@ -1125,7 +1134,7 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
   const store = createStore({ storage: memStorage(), seed: () => seedState('2026-07-14') });
   const timeId = store.addTracker({ name: 'Focus', type: 'counter', time: true });
   eq(store.state.trackers[timeId].pomodoro,
-    { enabled: false, workMins: 25, breakMins: 5, longBreakMins: 15, phase: null, phaseEndTimestamp: null, cyclesCompleted: 0, paused: false, pausedRemainingMs: null, workAccumMs: 0 },
+    { enabled: false, workMins: 25, breakMins: 5, longBreakMins: 15, cyclesPerLongBreak: 4, phase: null, phaseEndTimestamp: null, cyclesCompleted: 0, paused: false, pausedRemainingMs: null, workAccumMs: 0 },
     'a fresh time counter gets Pomodoro defaults, off by default');
 
   const plainId = store.addTracker({ name: 'Reps', type: 'counter' });
@@ -1134,12 +1143,16 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
   const habitId = store.addTracker({ name: 'Stretch', type: 'habit' });
   eq(store.state.trackers[habitId].pomodoro, null, 'a habit has no Pomodoro state at all');
 
-  store.updateTracker(timeId, { pomodoro: { enabled: true, workMins: 0, breakMins: -5, longBreakMins: 'x' } });
+  store.updateTracker(timeId, { pomodoro: { enabled: true, workMins: 0, breakMins: -5, longBreakMins: 'x', cyclesPerLongBreak: 0 } });
   const p = store.state.trackers[timeId].pomodoro;
   eq(p.enabled, true, 'enabled flag saved');
   eq(p.workMins, 25, 'a non-positive/invalid minute value falls back to the default rather than going to 0 or NaN');
   eq(p.breakMins, 5, 'same for a negative value');
   eq(p.longBreakMins, 15, 'same for a non-numeric value');
+  eq(p.cyclesPerLongBreak, 4, 'a non-positive cycle count falls back to the default of 4');
+
+  store.updateTracker(timeId, { pomodoro: { enabled: true, workMins: 25, breakMins: 5, longBreakMins: 15, cyclesPerLongBreak: 8 } });
+  eq(store.state.trackers[timeId].pomodoro.cyclesPerLongBreak, 8, 'a valid custom cycle count is kept');
 }
 
 // -- store: start/stop/cancel/skip/pause/resume/checkPomodoroPhases --

@@ -250,7 +250,7 @@ export function periodIntensity(achieved, targetSum, lowerMult, upperMult) {
 // tick. Pure data in, data out; store.js owns persistence, the views own
 // display and the setInterval that repaints them (see log-sheet.js).
 
-export const POMODORO_CYCLES_FOR_LONG_BREAK = 4;
+export const DEFAULT_POMODORO_CYCLES_FOR_LONG_BREAK = 4;
 export const POMODORO_PHASE_LABEL = { work: 'Work', break: 'Break', longBreak: 'Long break' };
 
 function pomodoroPhaseDurationMs(p, phase) {
@@ -259,11 +259,12 @@ function pomodoroPhaseDurationMs(p, phase) {
   return p.breakMins * 60000;
 }
 
-// Work phase -> break (long break every POMODORO_CYCLES_FOR_LONG_BREAK-th
-// cycle); anything else (break or long break) -> back to work.
+// Work phase -> break (long break every cyclesPerLongBreak-th cycle, a
+// per-tracker setting); anything else (break or long break) -> back to work.
 function nextPomodoroPhase(p) {
   if (p.phase === 'work') {
-    return p.cyclesCompleted > 0 && p.cyclesCompleted % POMODORO_CYCLES_FOR_LONG_BREAK === 0
+    const n = p.cyclesPerLongBreak || DEFAULT_POMODORO_CYCLES_FOR_LONG_BREAK;
+    return p.cyclesCompleted > 0 && p.cyclesCompleted % n === 0
       ? 'longBreak' : 'break';
   }
   return 'work';
