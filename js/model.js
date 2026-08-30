@@ -2,7 +2,7 @@
 // No DOM, no storage — everything takes plain data in and returns data out,
 // so retro edits "recompute" simply by re-rendering.
 
-import { addDays, daysBetween, todayKey } from './dates.js';
+import { addDays, daysBetween, todayKey, mondayOf } from './dates.js';
 
 export function roundAmount(tracker, x) {
   return tracker.dec ? Math.round(x * 100) / 100 : Math.round(x);
@@ -128,12 +128,17 @@ export function dayStatus(tracker, days, dateKey, today = todayKey()) {
   if (dateKey === today) return 'pending';
   // A counter with no goal that day isn't "missed", just quiet.
   if (tracker.type === 'counter' && effectiveTarget(tracker, dateKey, entry) <= 0) return 'empty';
+  // A weekly-cadence tracker has no fixed daily obligation — an off day
+  // isn't a failure, so it reads the same as any other non-required day.
+  if (tracker.cadence && tracker.cadence.enabled) return 'empty';
   return 'miss';
 }
 
 // Consecutive goal-hit days ending today; an unfinished today doesn't break
-// the run, it just doesn't count yet.
+// the run, it just doesn't count yet. Weekly-cadence trackers dispatch to
+// the week-granularity versions below — same philosophy, one level up.
 export function currentStreak(tracker, days, today = todayKey()) {
+  if (tracker.cadence && tracker.cadence.enabled) return currentWeeklyStreak(tracker, days, today);
   let d = today;
   if (!isHit(tracker, entryFor(days, d, tracker.id), d)) d = addDays(d, -1);
   let n = 0;
@@ -145,6 +150,7 @@ export function currentStreak(tracker, days, today = todayKey()) {
 }
 
 export function longestStreak(tracker, days, today = todayKey()) {
+  if (tracker.cadence && tracker.cadence.enabled) return longestWeeklyStreak(tracker, days, today);
   const first = firstDayKey(tracker, days);
   if (!first) return 0;
   let best = 0;
@@ -158,6 +164,55 @@ export function longestStreak(tracker, days, today = todayKey()) {
     }
   }
   return best;
+}
+
+// Consecutive quota-met weeks (Mon-Sun) ending with this week. A week still
+// in progress that hasn't reached quota yet doesn't break the streak, it
+// just isn't counted yet — mirrors currentStreak's "today in progress" rule
+// one level up. Terminates naturally once it reaches weeks before the
+// tracker existed (hitDays is 0 there, always below quota) — no explicit
+// lower bound needed, since rangeStats returns zeroes for weeks with no data.
+function currentWeeklyStreak(tracker, days, today) {
+  const quota = tracker.cadence.timesPerWeek;
+  let monday = mondayOf(today);
+  const cur = rangeStats(tracker, days, monday, addDays(monday, 6), today);
+  if (cur.hitDays < quota) monday = addDays(monday, -7);
+  let n = 0;
+  for (;;) {
+    const stat = rangeStats(tracker, days, monday, addDays(monday, 6), today);
+    if (stat.hitDays < quota) break;
+    n++;
+    monday = addDays(monday, -7);
+  }
+  return n;
+}
+
+function longestWeeklyStreak(tracker, days, today) {
+  const first = firstDayKey(tracker, days);
+  if (!first) return 0;
+  const quota = tracker.cadence.timesPerWeek;
+  const curMonday = mondayOf(today);
+  let best = 0;
+  let run = 0;
+  for (let monday = mondayOf(first); monday <= curMonday; monday = addDays(monday, 7)) {
+    const stat = rangeStats(tracker, days, monday, addDays(monday, 6), today);
+    if (stat.hitDays >= quota) {
+      run++;
+      if (run > best) best = run;
+    } else if (monday !== curMonday) {
+      run = 0; // the current week in progress doesn't reset the run
+    }
+  }
+  return best;
+}
+
+// Hit-days-so-far vs quota for the Mon-Sun week containing `today` — the
+// shared building block views use to show weekly-cadence progress.
+export function weekProgress(tracker, days, today = todayKey()) {
+  const quota = tracker.cadence ? tracker.cadence.timesPerWeek : 0;
+  const monday = mondayOf(today);
+  const stat = rangeStats(tracker, days, monday, addDays(monday, 6), today);
+  return { hitDays: stat.hitDays, quota, met: stat.hitDays >= quota };
 }
 
 // All-time stats for the history view.
@@ -389,6 +444,7 @@ export function todaySummary(state, today = todayKey()) {
   let goals = 0;
   let hit = 0;
   for (const t of activeTrackers(state)) {
+    if (t.cadence && t.cadence.enabled) continue; // no fixed daily obligation
     const entry = entryFor(state.days, today, t.id);
     if (t.type === 'counter' && effectiveTarget(t, today, entry) <= 0 &&
         !(entry && entry.goalOverride === 0)) continue;

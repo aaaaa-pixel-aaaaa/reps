@@ -84,11 +84,12 @@ export function openTrackerEditor(store, trackerId = null, presets = {}) {
         type: 'counter', groupId: presets.groupId || null, priority: false,
         unit: '', dec: false,
         target: { base: 0, mode: 'none', inc: 0, start: todayKey() },
-        chips: [],
+        chips: [], cadence: { enabled: false, timesPerWeek: 3 },
       };
   if (f.type === 'counter') {
     f.target = f.target || { base: 0, mode: 'none', inc: 0, start: todayKey() };
   }
+  f.cadence = f.cadence || { enabled: false, timesPerWeek: 3 };
 
   openSheet({
     title: existing ? `Edit ${existing.name}` : 'New tracker',
@@ -103,6 +104,38 @@ export function openTrackerEditor(store, trackerId = null, presets = {}) {
 
       const counterBox = h('div', {});
       const progBox = h('div', {});
+      const scheduleBox = h('div', {});
+
+      // Applies to both counter and habit trackers alike, so it's a sibling
+      // of counterBox rather than nested inside it — no dependency on
+      // f.type/f.dec/f.time, so nothing else needs to re-trigger it.
+      function renderSchedule() {
+        const weekly = f.cadence.enabled;
+        const hintText = () =>
+          `Hit your goal on any ${f.cadence.timesPerWeek} of 7 days this week to keep the streak going.`;
+        const timesInput = weekly ? h('input', {
+          class: 'input num', type: 'number', min: '1', max: '7', step: '1', inputmode: 'numeric',
+        }) : null;
+        const hint = h('div', { class: 'hint', style: 'margin-top:-6px' }, weekly ? hintText() : '');
+        if (weekly) {
+          timesInput.value = f.cadence.timesPerWeek;
+          timesInput.addEventListener('input', () => {
+            f.cadence.timesPerWeek = Math.min(7, Math.max(1, Math.round(parseFloat(timesInput.value)) || 3));
+            hint.textContent = hintText();
+          });
+        }
+        scheduleBox.replaceChildren(
+          field('schedule', segmented([
+            { value: 'daily', label: 'Every day' },
+            { value: 'weekly', label: 'Some days a week' },
+          ], weekly ? 'weekly' : 'daily', (v) => {
+            f.cadence.enabled = v === 'weekly';
+            renderSchedule();
+          })),
+          weekly ? field('times per week', timesInput) : null,
+          weekly ? hint : null,
+        );
+      }
 
       function renderProg() {
         progBox.replaceChildren();
@@ -282,6 +315,7 @@ export function openTrackerEditor(store, trackerId = null, presets = {}) {
             })),
         field('colour', swatchPicker(f.color, (c) => { f.color = c; api.setAccent(c); })),
         counterBox,
+        scheduleBox,
         field('group', groupSelect),
         switchRow('Pin to top', 'priority trackers live on the Home screen', !!f.priority,
           (on) => { f.priority = on; }),
@@ -303,6 +337,7 @@ export function openTrackerEditor(store, trackerId = null, presets = {}) {
         }, existing ? 'Save changes' : 'Create tracker'),
       ].filter(Boolean));
       renderCounterFields();
+      renderSchedule();
       if (!existing) setTimeout(() => nameInput.focus(), 350);
     },
   });

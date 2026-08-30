@@ -4,7 +4,7 @@
 import { todayKey, longDate, daysBetween } from '../dates.js';
 import {
   entryFor, effectiveTarget, isHit, currentStreak, fmtAmount,
-  habitCount, habitTarget, POMODORO_PHASE_LABEL,
+  habitCount, habitTarget, POMODORO_PHASE_LABEL, weekProgress,
   pinnedTrackers, groupTrackers, sortedGroups, todaySummary,
 } from '../model.js';
 import { h, icon, accentStyle, haptic, ringSVG, reducedMotion, openSheet, toast } from '../ui.js';
@@ -38,9 +38,10 @@ function animatedRing(t, size, stroke, progress) {
 
 function streakChip(t, days, today, onclick) {
   const n = currentStreak(t, days, today);
+  const unit = t.cadence && t.cadence.enabled ? 'week' : 'day';
   return h('button', {
     class: `streak num ${n > 0 ? 'hot' : ''}`,
-    'aria-label': `${n} day streak — view history`,
+    'aria-label': `${n} ${unit} streak — view history`,
     onclick,
   },
     h('span', { style: n > 0 ? '' : 'filter:grayscale(1);opacity:0.45' }, '\u{1F525}'),
@@ -150,6 +151,8 @@ function trackerRow(store, t, today) {
   const total = entry ? entry.total || 0 : 0;
   const streak = currentStreak(t, store.state.days, today);
   const timing = t.time && store.state.timers[t.id];
+  const weekly = t.cadence && t.cadence.enabled;
+  const wp = weekly ? weekProgress(t, store.state.days, today) : null;
   return h('div', {
     class: `trow ${done ? 'done' : ''}`,
     style: accentStyle(t.color),
@@ -163,7 +166,8 @@ function trackerRow(store, t, today) {
         t.priority ? h('span', { class: 'trow-star', 'aria-label': 'pinned' }, icon('starFill')) : null),
       h('div', { class: `trow-sub num ${timing ? 'trow-timer' : ''}` },
         timing ? `⏱ ${timerLabel(t, 'timer running')}`
-          : streak > 0 ? `\u{1F525} ${streak} day${streak === 1 ? '' : 's'}`
+          : streak > 0 ? `\u{1F525} ${streak} ${weekly ? 'week' : 'day'}${streak === 1 ? '' : 's'}`
+          : weekly ? `${wp.hitDays} of ${wp.quota} this week`
           : (t.type === 'habit'
               ? (habitTarget(t, entry) > 1 ? `${habitCount(entry)} of ${habitTarget(t, entry)} today` : 'tap circle to check off')
               : (t.time ? 'minutes' : (t.unit || 'counter'))),

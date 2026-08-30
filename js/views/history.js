@@ -10,6 +10,7 @@ import {
 import {
   entryFor, effectiveTarget, isHit, dayStatus, trackerStats,
   fmtAmount, habitCount, habitTarget, hitIntensity, rangeStats, periodIntensity,
+  weekProgress,
 } from '../model.js';
 import { h, icon, accentStyle, haptic, ringSVG, rgba } from '../ui.js';
 import { openDayEditor } from './day-editor.js';
@@ -42,10 +43,13 @@ export function renderHistory(root, store, trackerId) {
   else if (mode === 'week') body = weekCalendar(store, t, cur, today);
   else body = monthCalendar(store, t, year, today);
 
+  const weekly = t.cadence && t.cadence.enabled;
+  const wp = weekly ? weekProgress(t, days, today) : null;
+
   root.append(h('div', { style: accentStyle(t.color) },
     header(store, t),
     hero(store, t, today, stats),
-    statsGrid(t, stats),
+    statsGrid(t, stats, wp),
     viewToggle(store, t, mode),
     body,
   ));
@@ -263,6 +267,7 @@ function hero(store, t, today, stats) {
   const totalLine = t.type === 'counter'
     ? `${fmtAmount(t, stats.total)}${t.unit ? ' ' + t.unit : ''} all-time`
     : `${stats.doneDays} day${stats.doneDays === 1 ? '' : 's'} done all-time`;
+  const weeklySuffix = t.cadence && t.cadence.enabled ? ' wk' : '';
 
   return h('div', { class: 'hero', role: t.type === 'counter' ? 'button' : undefined,
     onclick: t.type === 'counter' ? () => openLogSheet(store, t.id) : undefined },
@@ -272,16 +277,18 @@ function hero(store, t, today, stats) {
       h('div', { class: 'hero-line2 num' }, totalLine),
       h('div', { class: 'hero-streaks' },
         h('span', { class: `streak num ${stats.currentStreak > 0 ? 'hot' : ''}` },
-          `\u{1F525} ${stats.currentStreak}`),
-        h('span', { class: 'streak num' }, `best ${stats.longestStreak}`),
+          `\u{1F525} ${stats.currentStreak}${weeklySuffix}`),
+        h('span', { class: 'streak num' }, `best ${stats.longestStreak}${weeklySuffix}`),
       )),
   );
 }
 
-function statsGrid(t, stats) {
+function statsGrid(t, stats, wp) {
   const cell = (val, label, sub) => h('div', { class: 'stat' },
     h('b', { class: 'num' }, val, sub ? h('small', {}, ` ${sub}`) : null),
     h('span', {}, label));
+  const weekly = t.cadence && t.cadence.enabled;
+  const unit = (n) => (weekly ? (n === 1 ? 'week' : 'weeks') : (n === 1 ? 'day' : 'days'));
   const cells = [];
   if (t.type === 'counter') {
     cells.push(
@@ -291,16 +298,17 @@ function statsGrid(t, stats) {
       cell(stats.bestDay ? fmtAmount(t, stats.bestDay.total) : '–',
         stats.bestDay ? `best day · ${shortDate(stats.bestDay.key)}` : 'best day', stats.bestDay ? t.unit : ''),
       cell(stats.sessions ? fmtAmount(t, stats.avgPerSession) : '–', 'avg per set', stats.sessions ? t.unit : ''),
-      cell(String(stats.longestStreak), 'longest streak', stats.longestStreak === 1 ? 'day' : 'days'),
+      cell(String(stats.longestStreak), 'longest streak', unit(stats.longestStreak)),
     );
   } else {
     cells.push(
       cell(String(stats.doneDays), 'days done'),
       cell(String(stats.goalsHit), 'goals hit'),
-      cell(String(stats.currentStreak), 'current streak', stats.currentStreak === 1 ? 'day' : 'days'),
-      cell(String(stats.longestStreak), 'longest streak', stats.longestStreak === 1 ? 'day' : 'days'),
+      cell(String(stats.currentStreak), 'current streak', unit(stats.currentStreak)),
+      cell(String(stats.longestStreak), 'longest streak', unit(stats.longestStreak)),
     );
   }
+  if (weekly) cells.push(cell(`${wp.hitDays}/${wp.quota}`, 'this week'));
   return h('div', { class: 'stats' }, cells);
 }
 
@@ -365,11 +373,12 @@ function calendar(store, t, cur, today) {
 
 function legend(t) {
   const item = (style, label) => h('span', {}, h('i', { style }), label);
+  const weekly = t.cadence && t.cadence.enabled;
   return h('div', { class: 'cal-legend' },
     item('background:var(--c)', t.type === 'habit' ? 'done' : 'goal hit'),
     item('background:var(--c);filter:saturate(2.4) brightness(1.12)', 'exceeded'),
     t.type === 'counter' || (t.perDay || 1) > 1 ? item('background:var(--c-25)', 'partial') : null,
-    item('background:rgba(228,87,61,0.28)', 'missed'),
+    weekly ? null : item('background:rgba(228,87,61,0.28)', 'missed'),
     item('background:transparent;border:1px solid var(--line)', 'empty'),
   );
 }

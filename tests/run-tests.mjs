@@ -9,7 +9,7 @@ import {
   longestStreak, trackerStats, todaySummary, fmtAmount, fmtMinutes,
   habitCount, habitTarget, hitIntensity, rangeStats, periodIntensity,
   pomodoroWorkElapsedMs, pomodoroRemainingMs, advancePomodoro, skipPomodoro,
-  DEFAULT_POMODORO_CYCLES_FOR_LONG_BREAK,
+  DEFAULT_POMODORO_CYCLES_FOR_LONG_BREAK, weekProgress,
 } from '../js/model.js';
 import { createStore, normalizeState, validateImport, seedState, demoState } from '../js/store.js';
 import { pinnedTrackers, groupTrackers, reorderContext } from '../js/model.js';
@@ -176,6 +176,94 @@ eq(effectiveTarget(counter(), '2026-07-14', { total: 10, sets: [] }), 50, 'no ov
   for (let d = '2026-07-05'; d <= '2026-07-13'; d = addDays(d, 1)) days[d] = { h1: { done: true } };
   eq(currentStreak(habit, days, '2026-07-14'), 9, 'habit streak, today pending');
   eq(longestStreak(habit, days, '2026-07-14'), 9, 'habit longest');
+}
+
+// ---------- model: weekly cadence ----------
+// A tracker can require its goal on only some number of days a week
+// (tracker.cadence) instead of every day. Weeks are Monday-start.
+{
+  // dayStatus: an off day for a weekly-cadence tracker reads as 'empty',
+  // never 'miss' — hit/partial/pending/future are unaffected.
+  const t = counter({ cadence: { enabled: true, timesPerWeek: 3 }, createdAt: '2026-07-01' });
+  const days = {
+    '2026-07-10': { c1: { total: 50, sets: [{ a: 50, t: 1 }] } },
+    '2026-07-11': { c1: { total: 20, sets: [{ a: 20, t: 1 }] } },
+  };
+  const today = '2026-07-14';
+  eq(dayStatus(t, days, '2026-07-10', today), 'hit', 'weekly cadence: hit unaffected');
+  eq(dayStatus(t, days, '2026-07-11', today), 'partial', 'weekly cadence: real partial effort still shows');
+  eq(dayStatus(t, days, '2026-07-12', today), 'empty', 'weekly cadence: off day reads empty, not miss');
+  eq(dayStatus(t, days, today, today), 'pending', 'weekly cadence: today untouched still pending');
+  eq(dayStatus(t, days, '2026-07-20', today), 'future', 'weekly cadence: future unaffected');
+}
+{
+  // currentStreak/longestStreak: quota-met weeks (Mon-Sun), reusing
+  // rangeStats. today = Wed 2026-07-15, inside the week Mon 07-13..Sun 07-19.
+  const habit = { id: 'h1', type: 'habit', createdAt: '2026-06-22', cadence: { enabled: true, timesPerWeek: 3 } };
+  const hit = (d) => ({ h1: { count: 1 } });
+  const days = {
+    // three full prior weeks, each hit exactly quota (Mon/Tue/Wed)
+    '2026-06-22': hit(), '2026-06-23': hit(), '2026-06-24': hit(),
+    '2026-06-29': hit(), '2026-06-30': hit(), '2026-07-01': hit(),
+    '2026-07-06': hit(), '2026-07-07': hit(), '2026-07-08': hit(),
+    // current week (07-13..07-19): only one hit so far
+    '2026-07-13': hit(),
+  };
+  const today = '2026-07-15';
+  eq(currentStreak(habit, days, today), 3,
+    'weekly streak: quota not yet met this week does not break 3 prior qualifying weeks');
+  eq(longestStreak(habit, days, today), 3,
+    'weekly longest: an in-progress, not-yet-quota-met current week does not reset an established best');
+
+  // meeting quota by today extends the streak to include this week
+  days['2026-07-14'] = hit();
+  days['2026-07-15'] = hit();
+  eq(currentStreak(habit, days, today), 4, 'weekly streak: meeting quota mid-week counts the current week');
+
+  // a fully-elapsed past week that missed quota breaks the streak, even
+  // though an earlier week further back met it
+  delete days['2026-07-07'];
+  delete days['2026-07-08'];
+  eq(currentStreak(habit, days, today), 1,
+    'weekly streak: a missed, fully-elapsed week breaks continuity regardless of older history');
+}
+{
+  // longestStreak: an earlier, better run survives a gap rather than being
+  // shadowed by whatever the trailing run happens to be.
+  const habit = { id: 'h1', type: 'habit', createdAt: '2026-06-29', cadence: { enabled: true, timesPerWeek: 3 } };
+  const hit3 = (monday) => ({
+    [monday]: { h1: { count: 1 } },
+    [addDays(monday, 1)]: { h1: { count: 1 } },
+    [addDays(monday, 2)]: { h1: { count: 1 } },
+  });
+  const days = {
+    ...hit3('2026-06-29'), ...hit3('2026-07-06'), // weeks 1-2: run of 2
+    // week 3 (07-13..19): no hits, breaks the run
+    ...hit3('2026-07-20'), ...hit3('2026-07-27'), ...hit3('2026-08-03'), // weeks 4-6: run of 3
+    // week containing today (08-17..23): no hits yet, in progress
+  };
+  eq(longestStreak(habit, days, '2026-08-19'), 3, 'weekly longest: a later, longer run beats the earlier one');
+}
+{
+  // weekProgress: hit-days-so-far vs quota for the current, partially
+  // elapsed week.
+  const habit = { id: 'h1', type: 'habit', cadence: { enabled: true, timesPerWeek: 3 } };
+  const days = { '2026-07-13': { h1: { count: 1 } }, '2026-07-14': { h1: { count: 1 } } };
+  eq(weekProgress(habit, days, '2026-07-15'), { hitDays: 2, quota: 3, met: false },
+    'weekProgress reports hit days so far against quota, not yet met');
+}
+{
+  // todaySummary: a weekly-cadence tracker has no fixed daily obligation,
+  // so it's excluded from the tally whether or not it was hit today.
+  const trackers = {
+    w: { id: 'w', type: 'habit', perDay: 1, cadence: { enabled: true, timesPerWeek: 3 } },
+    d: { id: 'd', type: 'habit', perDay: 1, cadence: { enabled: false, timesPerWeek: 3 } },
+  };
+  const today = '2026-07-15';
+  eq(todaySummary({ trackers, days: { [today]: { w: { count: 1 }, d: { count: 1 } } } }, today),
+    { goals: 1, hit: 1 }, 'todaySummary: weekly tracker excluded even when hit today');
+  eq(todaySummary({ trackers, days: {} }, today),
+    { goals: 1, hit: 0 }, 'todaySummary: weekly tracker excluded even when not hit today');
 }
 
 // ---------- model: stats ----------
@@ -1153,6 +1241,27 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
 
   store.updateTracker(timeId, { pomodoro: { enabled: true, workMins: 25, breakMins: 5, longBreakMins: 15, cyclesPerLongBreak: 8 } });
   eq(store.state.trackers[timeId].pomodoro.cyclesPerLongBreak, 8, 'a valid custom cycle count is kept');
+}
+
+// -- normalizeTracker: weekly cadence defaults, clamping, both types --
+{
+  const store = createStore({ storage: memStorage(), seed: () => seedState('2026-07-14') });
+  const habitId = store.addTracker({ name: 'Stretch2', type: 'habit' });
+  const counterId = store.addTracker({ name: 'Run2', type: 'counter', target: { base: 5 } });
+
+  eq(store.state.trackers[habitId].cadence, { enabled: false, timesPerWeek: 3 },
+    'a fresh habit gets cadence defaults, off by default');
+  eq(store.state.trackers[counterId].cadence, { enabled: false, timesPerWeek: 3 },
+    'a fresh counter gets the same default cadence shape as a habit');
+
+  store.updateTracker(counterId, { cadence: { enabled: true, timesPerWeek: 0 } });
+  eq(store.state.trackers[counterId].cadence.timesPerWeek, 3, 'a non-positive timesPerWeek falls back to the default of 3');
+
+  store.updateTracker(counterId, { cadence: { enabled: true, timesPerWeek: 10 } });
+  eq(store.state.trackers[counterId].cadence.timesPerWeek, 7, 'timesPerWeek is clamped to a maximum of 7');
+
+  store.updateTracker(counterId, { cadence: { enabled: true, timesPerWeek: 4 } });
+  eq(store.state.trackers[counterId].cadence, { enabled: true, timesPerWeek: 4 }, 'a valid custom cadence is kept as-is');
 }
 
 // -- store: start/stop/cancel/skip/pause/resume/checkPomodoroPhases --

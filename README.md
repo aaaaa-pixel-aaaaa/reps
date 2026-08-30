@@ -12,6 +12,10 @@ Add-to-Home-Screen app.
   optional auto-progression (target grows daily or weekly from an anchor
   date).
 - **Habits** are one satisfying tap per day; streaks count consecutive days.
+- **Schedule**: any counter or habit can require its goal on only some
+  number of days a week instead of every day — a missed day no longer
+  breaks anything, and streaks, calendar, and stats all track weekly quota
+  met/not-met instead of daily perfection.
 - **Groups** organise trackers Chrome-tab-group style: colour, collapse,
   reorder, pin.
 - **Priority** trackers/groups sort first; priority trackers live as big

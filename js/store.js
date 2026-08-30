@@ -63,6 +63,16 @@ function normalizePomodoro(raw, isTimeCounter) {
   };
 }
 
+// A tracker's goal can apply every day (the default) or on only some number
+// of days each week — timesPerWeek persists even while disabled, same as
+// Pomodoro's settings, so re-enabling it doesn't lose the last chosen count.
+function normalizeCadence(raw) {
+  const src = raw && typeof raw === 'object' ? raw : {};
+  const n = Math.round(num(src.timesPerWeek, 3));
+  const timesPerWeek = n > 0 ? Math.min(7, n) : 3;
+  return { enabled: !!src.enabled, timesPerWeek };
+}
+
 // Ends a tracker's live Pomodoro session (stop/cancel) — clears the phase
 // bookkeeping back to "no session running" while leaving the user's
 // enabled/workMins/breakMins/longBreakMins settings untouched for next time.
@@ -89,6 +99,7 @@ function normalizeTracker(raw, i) {
     order: num(raw.order, i),
     pinOrder: num(raw.pinOrder, num(raw.order, i)),
     createdAt: isValidKey(raw.createdAt) ? raw.createdAt : todayKey(),
+    cadence: normalizeCadence(raw.cadence),
   };
   if (type === 'counter') {
     t.time = !!raw.time; // amounts are minutes, shown as h/m
