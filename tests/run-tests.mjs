@@ -13,8 +13,8 @@ import {
 } from '../js/model.js';
 import { createStore, normalizeState, validateImport, seedState, demoState } from '../js/store.js';
 import {
-  fmtTime12, addMinutesToTime, classEndTime, classTimeRange, classOccursOn,
-  isClassDone, classesForDay, classesOccurringOn, dayAttendance, todayClassSummary,
+  fmtTime12, addMinutesToTime, classEndTime, classTimeRange, classTimeForDay, classTimeFor,
+  classOccursOn, isClassDone, classesForDay, classesOccurringOn, dayAttendance, todayClassSummary,
   classDayStatus, nextOccurrence, classStats, allClassesStats,
 } from '../js/classes.js';
 import { pinnedTrackers, groupTrackers, reorderContext } from '../js/model.js';
@@ -1419,6 +1419,20 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
   const neverMet = classStats({ ...statCls, createdAt: '2026-07-27' }, {}, '2026-07-13');
   eq(neverMet, { scheduled: 0, attended: 0, currentStreak: 0, longestStreak: 0 }, 'createdAt after today: no stats yet');
 
+  // per-day time overrides: a lecture that's longer/later on some of its
+  // own days — classTimeForDay/classTimeFor fall back to the plain
+  // startTime/durationMins for any day without its own entry.
+  const varied = {
+    id: 'v', name: 'Varied', days: [0, 2], startTime: '09:00', durationMins: 60,
+    perDayTimes: { 2: { startTime: '15:00', durationMins: 120 } }, createdAt: '2026-07-01',
+  };
+  eq(classTimeForDay(varied, 0), { startTime: '09:00', durationMins: 60 }, 'Monday has no override: falls back to the plain fields');
+  eq(classTimeForDay(varied, 2), { startTime: '15:00', durationMins: 120 }, 'Wednesday uses its own override');
+  eq(classTimeFor(varied, '2026-07-13'), { startTime: '09:00', durationMins: 60 }, 'classTimeFor resolves a date to its weekday (Monday)');
+  eq(classTimeFor(varied, '2026-07-15'), { startTime: '15:00', durationMins: 120 }, 'classTimeFor resolves a date to its weekday (Wednesday)');
+  eq(classTimeForDay({ ...varied, perDayTimes: null }, 2), { startTime: '09:00', durationMins: 60 },
+    'no perDayTimes at all: every day falls back to the plain fields');
+
   // one-off events: `date` set means the class meets exactly once, on that
   // date, regardless of `days`/`startDate`/`endDate` (normalizeClass keeps
   // those empty, but classOccursOn ignores them either way as a safety net).
@@ -1481,6 +1495,28 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
   eq(savedEvent.days, [], 'days cleared for a one-off event');
   eq(savedEvent.startDate, null, 'startDate cleared for a one-off event');
   eq(savedEvent.endDate, null, 'endDate cleared for a one-off event');
+
+  // perDayTimes: a stale entry for a day no longer in `days` is dropped;
+  // an entry for a day that is stays and is validated on its own. A
+  // separate linked tracker keeps this from disturbing studyId's totals
+  // used by the plain-Tutorial assertions further down.
+  const studyVariedId = store.addTracker({ name: 'StudyVaried', type: 'counter', time: true });
+  const variedId = store.addClass({
+    name: 'Varied', days: [0, 2], startTime: '09:00', durationMins: 60, linkedTrackerId: studyVariedId,
+    perDayTimes: { 0: { startTime: '10:00', durationMins: 90 }, 4: { startTime: '13:00', durationMins: 45 } },
+  });
+  const savedVaried = store.state.classes[variedId];
+  eq(savedVaried.perDayTimes, { 0: { startTime: '10:00', durationMins: 90 } },
+    'the Friday (4) override is dropped — Friday is not one of this class\'s days');
+
+  // Marking a per-day-varied class attended logs THAT day's own duration,
+  // not the class's plain default, to its linked tracker. Uses its own
+  // dates (a different Monday/Wednesday) so it doesn't disturb the
+  // classDays['2026-07-13'] assertions further down.
+  store.toggleClassDone(variedId, '2026-06-15'); // Monday: overridden to 90 min
+  eq(store.state.days['2026-06-15'][studyVariedId].total, 90, 'Monday logs its own overridden duration (90), not the plain default (60)');
+  store.toggleClassDone(variedId, '2026-06-17'); // Wednesday: no override, plain 60
+  eq(store.state.days['2026-06-17'][studyVariedId].total, 60, 'Wednesday (no override) logs the plain default duration');
 
   const nowDone = store.toggleClassDone(classId, '2026-07-13');
   eq(nowDone, true, 'toggle marks attended');

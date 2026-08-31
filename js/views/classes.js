@@ -13,8 +13,8 @@ import {
 } from '../dates.js';
 import { fmtMinutes } from '../model.js';
 import {
-  fmtTime12, addMinutesToTime, classEndTime, classTimeRange, classOccursOn,
-  isClassDone, classesForDay, classesOccurringOn, dayAttendance, todayClassSummary,
+  fmtTime12, addMinutesToTime, classTimeRange, classTimeForDay, classTimeFor,
+  classOccursOn, isClassDone, classesForDay, classesOccurringOn, dayAttendance, todayClassSummary,
   classDayStatus, nextOccurrence, classStats, allClassesStats,
 } from '../classes.js';
 import { PALETTE } from '../store.js';
@@ -30,7 +30,8 @@ import { field, switchRow, swatchPicker, segmented, escapeHtml } from './editors
 function classRow(store, c, dateKey, onNavigate) {
   const done = isClassDone(store.state.classDays, dateKey, c.id);
   const linked = c.linkedTrackerId && store.state.trackers[c.linkedTrackerId];
-  const subBits = [`${fmtTime12(c.startTime)}–${fmtTime12(classEndTime(c))}`];
+  const { startTime, durationMins } = classTimeFor(c, dateKey);
+  const subBits = [`${fmtTime12(startTime)}–${fmtTime12(addMinutesToTime(startTime, durationMins))}`];
   if (c.location) subBits.push(c.location);
 
   return h('div', {
@@ -46,13 +47,13 @@ function classRow(store, c, dateKey, onNavigate) {
         e.stopPropagation();
         const nowDone = store.toggleClassDone(c.id, dateKey);
         haptic(nowDone ? [12, 50, 16] : 8);
-        if (nowDone && linked) toast(`+${fmtMinutes(c.durationMins)} added to ${linked.name}`);
+        if (nowDone && linked) toast(`+${fmtMinutes(durationMins)} added to ${linked.name}`);
       },
     }, icon('check')),
     h('div', { class: 'trow-main' },
       h('div', { class: 'trow-name' }, c.name),
       h('div', { class: 'trow-sub' }, subBits.join(' · '),
-        linked ? h('span', { class: 'class-linked' }, ` · +${fmtMinutes(c.durationMins)} → ${linked.name}`) : null)),
+        linked ? h('span', { class: 'class-linked' }, ` · +${fmtMinutes(durationMins)} → ${linked.name}`) : null)),
   );
 }
 
@@ -97,12 +98,28 @@ function classDaysLabel(c) {
   return c.days.length === 7 ? 'Every day' : c.days.map((d) => WEEKDAYS_MIN[d]).join('');
 }
 
+function dayRangeLabel(c, dayIndex) {
+  const t = classTimeForDay(c, dayIndex);
+  return `${fmtTime12(t.startTime)}–${fmtTime12(addMinutesToTime(t.startTime, t.durationMins))}`;
+}
+
+// A class's overall schedule as one line, for anywhere it's described
+// independent of any specific date (the manage sheet's row note, a class's
+// own history hero). A `perDayTimes` class spells out each day's own
+// range rather than a single shared one, since a shared range would be
+// wrong for at least one of its days.
+function classScheduleSummary(c) {
+  if (c.date) return `Once · ${shortDate(c.date)} · ${classTimeRange(c)}`;
+  if (!c.perDayTimes) return `${classDaysLabel(c)} · ${classTimeRange(c)}`;
+  return c.days.map((d) => `${WEEKDAYS_MIN[d]} ${dayRangeLabel(c, d)}`).join(', ');
+}
+
 function classOptRow(store, c, onChange) {
   return h('button', { class: 'opt', onclick: () => openClassOptions(store, c.id, onChange) },
     h('span', { class: 'group-dot', style: `background:${c.color}` }),
     h('span', { class: 'grow' },
       h('div', {}, c.name),
-      h('div', { class: 'opt-note', style: 'margin-top:2px' }, `${classDaysLabel(c)} · ${fmtTime12(c.startTime)}`)));
+      h('div', { class: 'opt-note', style: 'margin-top:2px' }, classScheduleSummary(c))));
 }
 
 export function openClassesOptions(store) {
@@ -117,10 +134,6 @@ export function openClassesOptions(store) {
 
         const sections = [
           h('div', { class: 'opt-list' }, [
-            h('button', {
-              class: 'opt',
-              onclick: () => { closeAllSheets(); location.hash = 'classes'; },
-            }, icon('cal'), h('span', { class: 'grow' }, 'All classes history')),
             h('button', { class: 'opt', onclick: () => openClassEditor(store, null, rebuild) },
               icon('plus'), h('span', { class: 'grow' }, 'New class or event')),
             ...active.map((c) => classOptRow(store, c, rebuild)),
@@ -218,7 +231,7 @@ export function openClassEditor(store, classId = null, onSaved = null) {
     ? JSON.parse(JSON.stringify(existing))
     : {
         name: '', color: PALETTE[Object.keys(store.state.classes).length % PALETTE.length],
-        days: [], date: null, startTime: '09:00', durationMins: 60, location: '',
+        days: [], date: null, startTime: '09:00', durationMins: 60, perDayTimes: null, location: '',
         linkedTrackerId: null, startDate: null, endDate: null,
       };
 
@@ -232,18 +245,21 @@ export function openClassEditor(store, classId = null, onSaved = null) {
       nameInput.value = f.name;
       nameInput.addEventListener('input', () => { f.name = nameInput.value; });
 
+      // The shared "same time every day" fields — used for a one-off event
+      // (its only occurrence) and for a recurring class with no per-day
+      // overrides. When per-day times are on, these are hidden entirely in
+      // favour of one row per selected day, so there's never a question of
+      // which value actually wins.
       const timeHint = h('div', { class: 'hint', style: 'margin-top:-6px' });
       const updateTimeHint = () => {
         timeHint.textContent = `${fmtTime12(f.startTime)} – ${fmtTime12(addMinutesToTime(f.startTime, f.durationMins))}`;
       };
-
       const startInput = h('input', { class: 'input num', type: 'time' });
       startInput.value = f.startTime;
       startInput.addEventListener('input', () => {
         if (startInput.value) f.startTime = startInput.value;
         updateTimeHint();
       });
-
       const durInput = h('input', { class: 'input num', type: 'number', min: '5', step: '5', inputmode: 'numeric' });
       durInput.value = f.durationMins;
       durInput.addEventListener('input', () => {
@@ -251,6 +267,9 @@ export function openClassEditor(store, classId = null, onSaved = null) {
         updateTimeHint();
       });
       updateTimeHint();
+      const sharedTimeFields = h('div', {},
+        h('div', { class: 'field-row' }, field('starts', startInput), field('duration (min)', durInput)),
+        timeHint);
 
       const locInput = h('input', { class: 'input', type: 'text', maxlength: '60', placeholder: 'e.g. Building 4, Rm 12' });
       locInput.value = f.location || '';
@@ -285,10 +304,28 @@ export function openClassEditor(store, classId = null, onSaved = null) {
         ].filter(Boolean));
       }
 
+      // One compact row per selected day — a day label, a time, a duration
+      // — shown only once "different time each day" is switched on, and
+      // only offered at all once there's more than one day to differ.
+      function perDayRow(dayIndex) {
+        const entry = f.perDayTimes[dayIndex] || (f.perDayTimes[dayIndex] = { startTime: f.startTime, durationMins: f.durationMins });
+        const t = h('input', { class: 'input num', type: 'time' });
+        t.value = entry.startTime;
+        t.addEventListener('input', () => { if (t.value) entry.startTime = t.value; });
+        const d = h('input', { class: 'input num', type: 'number', min: '5', step: '5', inputmode: 'numeric' });
+        d.value = entry.durationMins;
+        d.addEventListener('input', () => {
+          entry.durationMins = Math.max(5, Math.round(parseFloat(d.value)) || entry.durationMins);
+        });
+        return h('div', { class: 'perday-row' },
+          h('span', { class: 'perday-day' }, WEEKDAYS_MIN[dayIndex]), t, d);
+      }
+
       // Repeats every week (a weekday picker, plus the optional semester
-      // range above) or just once (a single date) — an event is simply a
-      // class with `date` set instead of `days`, so everything else about
-      // it (time, duration, location, linking, colour, history) is shared.
+      // range and per-day time overrides above) or just once (a single
+      // date) — an event is simply a class with `date` set instead of
+      // `days`, so everything else about it (time, duration, location,
+      // linking, colour, history) is shared.
       const scheduleBox = h('div', {});
       function renderSchedule() {
         const once = !!f.date;
@@ -296,7 +333,7 @@ export function openClassEditor(store, classId = null, onSaved = null) {
           { value: 'weekly', label: 'Every week' },
           { value: 'once', label: 'Just once' },
         ], once ? 'once' : 'weekly', (v) => {
-          if (v === 'once') { f.date = f.date || todayKey(); f.days = []; f.startDate = null; f.endDate = null; }
+          if (v === 'once') { f.date = f.date || todayKey(); f.days = []; f.perDayTimes = null; f.startDate = null; f.endDate = null; }
           else { f.date = null; }
           renderSchedule();
         }));
@@ -305,26 +342,50 @@ export function openClassEditor(store, classId = null, onSaved = null) {
           const dateInput = h('input', { class: 'input num', type: 'date' });
           dateInput.value = f.date;
           dateInput.addEventListener('input', () => { if (isValidKey(dateInput.value)) f.date = dateInput.value; });
-          scheduleBox.replaceChildren(repeatsToggle, field('date', dateInput));
+          scheduleBox.replaceChildren(repeatsToggle, field('date', dateInput), sharedTimeFields);
           return;
         }
+
         const dayBtns = WEEKDAYS_MIN.map((label, i) => h('button', {
           class: `dp-btn ${f.days.includes(i) ? 'on' : ''}`,
           type: 'button',
           'aria-pressed': String(f.days.includes(i)),
           'aria-label': WEEKDAYS[i],
-          onclick: (e) => {
-            f.days = f.days.includes(i) ? f.days.filter((d) => d !== i) : [...f.days, i].sort((x, y) => x - y);
-            e.currentTarget.classList.toggle('on');
-            e.currentTarget.setAttribute('aria-pressed', String(f.days.includes(i)));
+          onclick: () => {
+            const wasOn = f.days.includes(i);
+            f.days = wasOn ? f.days.filter((d) => d !== i) : [...f.days, i].sort((x, y) => x - y);
+            if (f.perDayTimes) {
+              if (wasOn) delete f.perDayTimes[i];
+              else f.perDayTimes[i] = { startTime: f.startTime, durationMins: f.durationMins };
+              // fewer than two days left: per-day variation no longer means
+              // anything, and its toggle is about to disappear from the UI
+              if (f.days.length <= 1) f.perDayTimes = null;
+            }
             haptic(6);
+            renderSchedule();
           },
         }, label));
-        scheduleBox.replaceChildren(
+
+        const perDayOn = !!f.perDayTimes;
+        const perDayToggle = f.days.length > 1 ? switchRow(
+          'Different time each day', 'e.g. 9–11 Mon, 3–5 Wed', perDayOn, (checked) => {
+            if (checked) {
+              f.perDayTimes = {};
+              for (const day of f.days) f.perDayTimes[day] = { startTime: f.startTime, durationMins: f.durationMins };
+            } else {
+              f.perDayTimes = null;
+            }
+            renderSchedule();
+          },
+        ) : null;
+
+        scheduleBox.replaceChildren(...[
           repeatsToggle,
           field('days', h('div', { class: 'daypicker' }, dayBtns), 'tap every day it meets'),
+          perDayToggle,
+          perDayOn ? h('div', { class: 'perday-list' }, f.days.map((d) => perDayRow(d))) : sharedTimeFields,
           rangeBox,
-        );
+        ].filter(Boolean));
         renderRange();
       }
       renderSchedule();
@@ -333,10 +394,6 @@ export function openClassEditor(store, classId = null, onSaved = null) {
         field('name', nameInput),
         field('colour', swatchPicker(f.color, (c) => { f.color = c; api.setAccent(c); })),
         scheduleBox,
-        h('div', { class: 'field-row' },
-          field('starts', startInput),
-          field('duration (min)', durInput)),
-        timeHint,
         field('location', locInput, 'optional'),
         field('link to a timer', linkSelect,
           timeCounters.length
@@ -404,7 +461,7 @@ function classHero(store, c, today, stats) {
       : c.date ? `Was on ${shortDate(c.date)}`
       : 'No upcoming classes';
   }
-  const schedLine = `${classDaysLabel(c)} · ${classTimeRange(c)}${c.location ? ' · ' + c.location : ''}`;
+  const schedLine = `${classScheduleSummary(c)}${c.location ? ' · ' + c.location : ''}`;
 
   return h('div', { class: 'hero' },
     leftEl,

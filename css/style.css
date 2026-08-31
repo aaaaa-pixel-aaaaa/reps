@@ -204,6 +204,13 @@ input, select, textarea { font: inherit; color: inherit; }
 .class-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; transition: opacity 0.15s; }
 .class-row:active { opacity: 0.65; }
 .class-row .mini-check { flex: none; }
+/* Same glow habit-check uses on completion, scaled down for this 36px
+   circle — box-shadow follows border-radius, so as long as the element
+   it's on is actually round (mini-check already is: border-radius:50%)
+   the glow comes out round too, not the square halo a box-shadow gives a
+   rectangular element. Scoped to class rows only, not every .mini-check
+   (habit trows use the same class without this treatment). */
+.class-row .mini-check.done { box-shadow: 0 0 14px -3px var(--c-70); }
 /* the linked-tracker note inside a row's sub line: the class's own accent
    (set per-row via accentStyle) instead of the usual dim grey, so a linked
    class visibly stands out from a plain one at a glance */
@@ -225,6 +232,14 @@ input, select, textarea { font: inherit; color: inherit; }
 }
 .dp-btn:active { transform: scale(0.92); }
 .dp-btn.on { background: var(--c); color: var(--on-c); border-color: var(--c); }
+
+/* per-day time overrides: one compact line per selected day, kept to a
+   single row each so differing times on different days doesn't turn the
+   form into a wall of fields */
+.perday-list { display: flex; flex-direction: column; gap: 8px; margin: 14px 0; }
+.perday-row { display: flex; align-items: center; gap: 8px; }
+.perday-day { width: 32px; flex: none; font-size: 13px; font-weight: 700; color: var(--dim); }
+.perday-row .input { height: 44px; }
 
 input[type="time"].input { line-height: 48px; }
 

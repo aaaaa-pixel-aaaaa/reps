@@ -70,6 +70,7 @@ Two new top-level collections alongside `trackers`/`groups`/`days`:
     "name", "color", "days": [0, 2],      // Monday=0 .. Sunday=6, dates.js's convention
     "date": "optional YYYY-MM-DD — set instead of days for a one-off event",
     "startTime": "09:00", "durationMins": 60,
+    "perDayTimes": "optional { [day]: { startTime, durationMins } } — overrides for specific days",
     "location": "optional, free text",
     "linkedTrackerId": "optional, a Time-measured counter's id",
     "startDate": "optional YYYY-MM-DD", "endDate": "optional YYYY-MM-DD",
@@ -100,6 +101,20 @@ empty too, so stored data never carries two conflicting ideas of when the
 thing happens). Everything else — time, duration, location, linking,
 colour, its own history page — works identically, since none of it cares
 whether an occurrence came from a weekday match or a single fixed date.
+
+### Different times on different days
+
+A class's `startTime`/`durationMins` are its plain, same-every-day time —
+fine until a lecture runs 9–11 on Monday but 3–5 on Wednesday. The editor's
+"Different time each day" switch (offered once 2+ days are selected) sets
+`perDayTimes`, an override per weekday; `classTimeForDay`/`classTimeFor`
+(`js/classes.js`) are the one place that resolves a day to its real time,
+falling back to the plain fields for any day without its own entry — every
+display (tile rows, history, the manage sheet's summary line) and the
+linked-tracker minutes logged on `toggleClassDone` go through them, so a
+day's own duration is always what actually gets used and shown, never the
+class's flat default. Switching the toggle off (or down to one day) drops
+`perDayTimes` back to null rather than leaving stale overrides around.
 
 ### Linking to a timer
 

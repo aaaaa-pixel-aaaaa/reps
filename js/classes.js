@@ -36,6 +36,24 @@ export function classTimeRange(cls) {
   return `${fmtTime12(cls.startTime)} – ${fmtTime12(classEndTime(cls))}`;
 }
 
+// A class's start/duration for one specific weekday — its own `perDayTimes`
+// override if it has one for that day (a lecture that runs longer on
+// Wednesdays than Mondays, say), otherwise its plain startTime/durationMins.
+// One-off events never carry perDayTimes (normalizeClass keeps it null for
+// them), so this always falls through to the plain fields for those.
+export function classTimeForDay(cls, dayIndex) {
+  const override = cls.perDayTimes && cls.perDayTimes[dayIndex];
+  return override
+    ? { startTime: override.startTime, durationMins: override.durationMins }
+    : { startTime: cls.startTime, durationMins: cls.durationMins };
+}
+
+// Same, resolved for a specific calendar date rather than a bare weekday —
+// what a tile row or day-detail sheet needs to show that day's real time.
+export function classTimeFor(cls, dateKey) {
+  return classTimeForDay(cls, weekdayIndex(dateKey));
+}
+
 // Does this class meet on this calendar day at all. A one-off event (`date`
 // set) meets only on that exact date, full stop — `days`/`startDate`/
 // `endDate` are meaningless for it and normalizeClass keeps them empty.

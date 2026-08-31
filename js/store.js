@@ -4,6 +4,7 @@
 
 import { todayKey, isValidKey, addDays, parseKey, weekdayIndex } from './dates.js';
 import { roundAmount, isHit, pomodoroWorkElapsedMs, advancePomodoro, skipPomodoro } from './model.js';
+import { classTimeFor } from './classes.js';
 
 // Timestamp for a set logged against dateKey: real time for today, a
 // synthetic noon-ish time for retro days (keeps display + undo order sane).
@@ -125,21 +126,43 @@ function normalizeTracker(raw, i) {
 }
 
 // A recurring weekly class, OR a one-off event when `date` is set — in
-// that case `days`/`startDate`/`endDate` are meaningless (classOccursOn
-// ignores them) and kept empty here so stored data never has two
-// conflicting ideas of when the thing happens. `days` are weekday indices
-// (dates.js's Monday=0..Sunday=6), `startTime` is "HH:MM" 24h.
+// that case `days`/`startDate`/`endDate`/`perDayTimes` are meaningless
+// (classOccursOn ignores them) and kept empty here so stored data never
+// has two conflicting ideas of when the thing happens. `days` are weekday
+// indices (dates.js's Monday=0..Sunday=6), `startTime` is "HH:MM" 24h.
 // `startDate`/`endDate` are both optional — left null a recurring class
 // repeats forever, matching how a tracker never has a built-in end date
-// either. `linkedTrackerId` is validated against the live tracker map by
-// the caller (normalizeState on load, commit() at runtime), never here,
-// since this function has no access to the tracker map.
+// either. `perDayTimes` optionally overrides startTime/durationMins for
+// individual days (a lecture that's 9-11 Monday but 3-5 Wednesday) — only
+// entries for days still in `days` survive, and an empty result normalizes
+// to null (js/classes.js's classTimeForDay treats null/no-entry the same:
+// fall back to the plain startTime/durationMins). `linkedTrackerId` is
+// validated against the live tracker map by the caller (normalizeState on
+// load, commit() at runtime), never here, since this function has no
+// access to the tracker map.
 function normalizeClass(raw, i) {
   if (!raw || typeof raw !== 'object') return null;
   const date = isValidKey(raw.date) ? raw.date : null;
   const days = !date && Array.isArray(raw.days)
     ? [...new Set(raw.days.map((d) => Math.round(num(d, -1))).filter((d) => d >= 0 && d <= 6))].sort((a, b) => a - b)
     : [];
+  const startTime = /^\d{2}:\d{2}$/.test(raw.startTime) ? raw.startTime : '09:00';
+  const durationMins = Math.max(5, Math.round(num(raw.durationMins, 60)));
+
+  let perDayTimes = null;
+  if (!date && raw.perDayTimes && typeof raw.perDayTimes === 'object') {
+    const cleaned = {};
+    for (const day of days) {
+      const src = raw.perDayTimes[day];
+      if (!src || typeof src !== 'object') continue;
+      cleaned[day] = {
+        startTime: /^\d{2}:\d{2}$/.test(src.startTime) ? src.startTime : startTime,
+        durationMins: Math.max(5, Math.round(num(src.durationMins, durationMins))),
+      };
+    }
+    if (Object.keys(cleaned).length) perDayTimes = cleaned;
+  }
+
   const createdAt = isValidKey(raw.createdAt) ? raw.createdAt : todayKey();
   return {
     id: str(raw.id) || genId('c'),
@@ -147,8 +170,9 @@ function normalizeClass(raw, i) {
     color: str(raw.color, PALETTE[i % PALETTE.length]),
     days,
     date,
-    startTime: /^\d{2}:\d{2}$/.test(raw.startTime) ? raw.startTime : '09:00',
-    durationMins: Math.max(5, Math.round(num(raw.durationMins, 60))),
+    startTime,
+    durationMins,
+    perDayTimes,
     location: str(raw.location, '').slice(0, 60),
     linkedTrackerId: str(raw.linkedTrackerId) || null,
     startDate: !date && isValidKey(raw.startDate) ? raw.startDate : null,
@@ -948,9 +972,13 @@ export function createStore({ storage, key = STORAGE_KEY, seed = seedState } = {
 
       const linked = c.linkedTrackerId && tracker(c.linkedTrackerId);
       if (linked && linked.type === 'counter' && linked.time) {
+        // The day's own duration, not always the class's plain default —
+        // a lecture linked to Study still logs its real Wednesday-afternoon
+        // length even if Monday's occurrence runs longer.
+        const mins = classTimeFor(c, dateKey).durationMins;
         const entry = dayEntry(dateKey, linked.id, true);
         const tMs = stampFor(dateKey, entry, now);
-        const amount = roundAmount(linked, nowDone ? c.durationMins : -c.durationMins);
+        const amount = roundAmount(linked, nowDone ? mins : -mins);
         entry.sets.push({ a: amount, t: tMs });
         entry.total = recomputeTotal(linked, entry.sets);
         cleanupDay(dateKey, linked.id);
