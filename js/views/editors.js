@@ -9,7 +9,7 @@ import { requestPomodoroPermission } from '../pomodoro-notify.js';
 
 // ---- small form builders ----
 
-function field(label, control, hint) {
+export function field(label, control, hint) {
   return h('div', { class: 'field' },
     h('label', {}, label),
     control,
@@ -31,7 +31,7 @@ export function segmented(options, value, onChange) {
   return seg;
 }
 
-function switchRow(label, sub, value, onChange) {
+export function switchRow(label, sub, value, onChange) {
   const sw = h('button', {
     class: `switch ${value ? 'on' : ''}`,
     role: 'switch',
@@ -50,7 +50,7 @@ function switchRow(label, sub, value, onChange) {
     sw);
 }
 
-function swatchPicker(value, onChange) {
+export function swatchPicker(value, onChange) {
   const row = h('div', { class: 'swatches', role: 'radiogroup', 'aria-label': 'Accent colour' });
   for (const c of PALETTE) {
     const b = h('button', {
@@ -544,6 +544,6 @@ export function openGroupOptions(store, groupId) {
   });
 }
 
-function escapeHtml(s) {
+export function escapeHtml(s) {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }

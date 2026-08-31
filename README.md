@@ -28,10 +28,18 @@ Add-to-Home-Screen app.
 - **Backup**: one tap exports `reps-backup-YYYY-MM-DD.json` via the share
   sheet (iOS offers "Save to Files") or a download; validated import
   restores it. Home nudges gently when backups go stale.
+- **Classes** (optional): a wide tile, twice a pinned card's width, listing
+  today's university classes and whether each has been attended. Classes
+  recur weekly (optionally bounded to a semester's start/end date) and can
+  be **linked** to a time counter — marking one attended logs its scheduled
+  duration onto that tracker automatically (a 2-hour tutorial adds 2 hours
+  to "Study"), and un-marking reverses it. Off by default; add it from
+  **New tracker**. See [Classes](#classes) below.
 - **Nutrition** (optional, read-only): a wide tile below the pinned trackers
   summarises today's energy and macros against an externally-maintained diet
   target file, colour-coded and with a warnings strip when a nutrient's been
-  off for several days. See [Nutrition](#nutrition) below.
+  off for several days. Off by default; add it back the same way. See
+  [Nutrition](#nutrition) below.
 - **Time counters** can track live via a start/stop timer instead of typing
   a number in after the fact, and optionally run that timer as a **Pomodoro**
   — work/break phases, a long break every Nth cycle (configurable), and a
@@ -40,6 +48,88 @@ Add-to-Home-Screen app.
 Data lives in `localStorage` under a single key (`reps_v1`), saved on every
 change. `?demo=1` opens a separate throwaway dataset with weeks of generated
 history.
+
+## Classes
+
+An optional, fully in-app timetable — unlike Nutrition, this one you edit
+yourself. Off by default (`state.meta.classesHidden`, default `true` until
+explicitly shown); once added, it lives as a wide tile below the pinned
+cards showing today's classes in time order, each with a one-tap check to
+mark it attended. Each class picks its own colour from the same swatch
+picker a tracker uses, editable any time from its options ("Edit") — it
+tints its row, its check, and its own history page's calendar exactly the
+way a tracker's colour does.
+
+### Data model
+
+Two new top-level collections alongside `trackers`/`groups`/`days`:
+
+```jsonc
+"classes": {
+  "<id>": {
+    "name", "color", "days": [0, 2],      // Monday=0 .. Sunday=6, dates.js's convention
+    "startTime": "09:00", "durationMins": 60,
+    "location": "optional, free text",
+    "linkedTrackerId": "optional, a Time-measured counter's id",
+    "startDate": "optional YYYY-MM-DD", "endDate": "optional YYYY-MM-DD",
+    "archived": false, "order", "createdAt"
+  }
+},
+"classDays": {
+  "YYYY-MM-DD": { "<classId>": { "done": true } }
+}
+```
+
+A class with no `startDate`/`endDate` repeats every week indefinitely — the
+same "no built-in end date" philosophy every tracker already follows.
+Setting both bounds it to a semester; once `endDate` passes it simply stops
+appearing on the tile (`classOccursOn`, `js/classes.js`), though its past
+attendance stays fully visible in its own history page. `classDays` only
+ever holds `true` entries — the same "presence means it happened, absence
+means nothing was logged" shape a tracker's own `days` entries use.
+
+### Linking to a timer
+
+A class can optionally name a **time-measured counter** (a counter tracker
+with `time: true`) as its `linkedTrackerId`. Marking the class attended
+appends a `+durationMins` set to that tracker for the same date — exactly
+the class's scheduled length, not a live-measured one — and un-marking
+appends the matching negative, an additive correction rather than tracking
+which exact set to remove (the same idiom the log sheet's own undo/minus
+button already use). `js/store.js`'s `commit()` re-validates every class's
+link on every mutation, so a link can never point at a tracker that's been
+deleted or edited away from a time counter — it's just quietly cleared.
+
+### History
+
+Each class gets its own history page (`#/classes/<id>`, reached by tapping
+its row on the tile or "History & attendance" from its options), mirroring
+a tracker's history page almost exactly: a hero (today's attended/not-yet
+toggle, or the next upcoming occurrence if it doesn't meet today), an
+attended/scheduled/attendance-rate/streak stats grid, and a month calendar
+— tapping any past or pending occurrence day toggles it directly, no
+separate day-editor sheet, since attendance has no count or override to
+adjust, just attended-or-not. Streaks (`classStats`, `js/classes.js`) count
+over the class's own occurrence days only, exactly like a weekly-cadence
+tracker's streak skips days it isn't obligated on.
+
+### All-classes overview
+
+The tile's calendar-icon button opens `#/classes` — one page across every
+class at once, for "how much did I attend overall" rather than one class
+at a time. It has no single class's colour to scope to, so it uses a fixed
+accent (`OVERVIEW_ACCENT`, the palette's first colour); a stats grid totals
+attended/scheduled/attendance-rate plus a streak of **perfect days** (every
+class scheduled that day was attended — `allClassesStats`), and a month
+calendar blends every class scheduled on a day into one cell
+(`dayAttendance`). A day's fill is coloured by **alpha alone**, not hue: a
+day where something was missed doesn't turn red, it just recedes — a
+literal darker shade of the same accent — while a fully-attended day comes
+in strong, so completeness reads as brightness the way it does on the
+per-class calendars' `hit`/`partial` cells, just continuous instead of
+three-valued. Since one cell can't show several classes' individual states,
+tapping any day with classes on it opens a sheet listing each with its own
+check, live-updating as you toggle them.
 
 ## Nutrition
 

@@ -7,6 +7,7 @@ import { renderHistory } from './views/history.js';
 import { h } from './ui.js';
 import { refreshNutrition, subscribeNutrition, nutritionData } from './nutrition-store.js';
 import { renderNutritionHistory } from './views/nutrition.js';
+import { renderClassesHistory, renderClassesOverview } from './views/classes.js';
 import { checkAndNotifyPomodoro } from './pomodoro.js';
 
 const params = new URLSearchParams(location.search);
@@ -33,6 +34,11 @@ function parseRoute() {
   if (name === 'nutrition') {
     return { name: 'nutrition-history' };
   }
+  if (name === 'classes') {
+    return arg && store.state.classes[arg]
+      ? { name: 'classes-history', classId: arg }
+      : { name: 'classes-overview' };
+  }
   return { name: 'home' };
 }
 
@@ -43,13 +49,17 @@ export function navigate(hash) {
 
 function render() {
   const route = parseRoute();
-  const routeKey = route.name + (route.trackerId || '');
+  const routeKey = route.name + (route.trackerId || route.classId || '');
   if (routeKey !== currentRoute) scrollMemo.set(currentRoute, window.scrollY);
   viewEl.replaceChildren();
   if (route.name === 'history') {
     renderHistory(viewEl, store, route.trackerId);
   } else if (route.name === 'nutrition-history') {
     renderNutritionHistory(viewEl);
+  } else if (route.name === 'classes-history') {
+    renderClassesHistory(viewEl, store, route.classId);
+  } else if (route.name === 'classes-overview') {
+    renderClassesOverview(viewEl, store);
   } else {
     renderHome(viewEl, store, { demo });
   }

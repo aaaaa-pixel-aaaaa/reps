@@ -191,6 +191,43 @@ input, select, textarea { font: inherit; color: inherit; }
 
 .card-sub { font-size: 12px; color: var(--dim); margin-top: -6px; }
 
+/* ---------- classes tile ---------- */
+
+.classes-card { align-items: stretch; text-align: left; gap: 10px; padding: 16px 14px; }
+/* padded past the cal-btn/dots buttons (each 38px wide, inset 4px from the
+   card's own edge) so the title/subtitle never renders underneath either */
+.classes-head { padding: 0 34px; }
+.classes-title { font-size: 15px; font-weight: 800; }
+.classes-sub { font-size: 12px; color: var(--dim); font-weight: 600; margin-top: 2px; }
+
+.class-list { display: flex; flex-direction: column; gap: 12px; }
+.class-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; transition: opacity 0.15s; }
+.class-row:active { opacity: 0.65; }
+.class-row .mini-check { flex: none; }
+/* the linked-tracker note inside a row's sub line: the class's own accent
+   (set per-row via accentStyle) instead of the usual dim grey, so a linked
+   class visibly stands out from a plain one at a glance */
+.class-linked { color: var(--c); font-weight: 700; }
+
+/* weekday multi-select in the class editor: seven equal toggle buttons,
+   M..S, mirroring .swatch's on-state treatment but for text labels */
+.daypicker { display: flex; gap: 6px; }
+.dp-btn {
+  flex: 1;
+  height: 42px;
+  border-radius: 12px;
+  background: var(--raise2);
+  border: 1px solid var(--line);
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--dim);
+  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.15s var(--spring);
+}
+.dp-btn:active { transform: scale(0.92); }
+.dp-btn.on { background: var(--c); color: var(--on-c); border-color: var(--c); }
+
+input[type="time"].input { line-height: 48px; }
+
 /* ---------- nutrition tile ---------- */
 
 .nutri-card { align-items: stretch; text-align: left; gap: 12px; padding: 16px 14px; }
@@ -948,6 +985,10 @@ input[type="date"].input { line-height: 48px; }
 .cal-cell.pending { background: var(--raise2); }
 .cal-cell.future, .cal-cell.empty { color: var(--faint); opacity: 0.5; }
 .cal-cell.today { box-shadow: inset 0 0 0 1.5px var(--c); }
+/* the all-classes overview colours cells by inline alpha rather than a
+   status class (see attendanceColor in js/views/classes.js) — near-full
+   attendance is bright enough to need .hit's own light-on-dark text flip */
+.cal-cell.attend-full { color: var(--on-c); }
 .cal-cell .ovr {
   position: absolute;
   top: 3px;

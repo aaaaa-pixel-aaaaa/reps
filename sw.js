@@ -3,7 +3,7 @@
 // is nutrition.json: it's maintained outside this repo, so it's served
 // network-first with a cache fallback instead (see the fetch handler below)
 // — cache-first would mean updates to it never reach an installed app.
-const VERSION = 'reps-v1.0.21';
+const VERSION = 'reps-v1.0.23';
 const CACHE = `reps-${VERSION}`;
 
 const NUTRITION_URL = 'https://raw.githubusercontent.com/aaaaa-pixel-aaaaa/reps/main/nutrition.json';
@@ -17,6 +17,7 @@ const ASSETS = [
   './js/dates.js',
   './js/model.js',
   './js/store.js',
+  './js/classes.js',
   './js/ui.js',
   './js/wheel.js',
   './js/pomodoro.js',
@@ -30,6 +31,7 @@ const ASSETS = [
   './js/views/editors.js',
   './js/views/settings.js',
   './js/views/nutrition.js',
+  './js/views/classes.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',

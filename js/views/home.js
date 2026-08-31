@@ -12,6 +12,7 @@ import { openLogSheet } from './log-sheet.js';
 import { openTrackerOptions, openTrackerEditor, openGroupEditor, openGroupOptions } from './editors.js';
 import { openSettings } from './settings.js';
 import { renderNutritionTile, nutritionAvailable } from './nutrition.js';
+import { renderClassesTile } from './classes.js';
 
 // Remembered ring progress + queued toggle effects so springy animations
 // survive the full re-render that follows every mutation.
@@ -250,6 +251,8 @@ export function renderHome(root, store, { demo } = {}) {
       pinned.map((t) => (t.type === 'counter' ? counterCard(store, t, today) : habitCard(store, t, today)))));
   }
 
+  if (!state.meta.classesHidden) root.append(renderClassesTile(store));
+
   if (!state.meta.nutritionHidden) {
     const nutritionTile = renderNutritionTile(store);
     if (nutritionTile) root.append(nutritionTile);
@@ -282,6 +285,7 @@ export function renderHome(root, store, { demo } = {}) {
 
 function openAddSheet(store) {
   const showNutritionOption = store.state.meta.nutritionHidden && nutritionAvailable();
+  const showClassesOption = store.state.meta.classesHidden;
   openSheet({
     title: 'Add',
     build(body, api) {
@@ -290,6 +294,15 @@ function openAddSheet(store) {
           icon('plus'), h('span', { class: 'grow' }, 'New tracker'), h('span', { class: 'opt-note' }, 'counter or habit')),
         h('button', { class: 'opt', onclick: () => { api.close(); openGroupEditor(store); } },
           icon('folder'), h('span', { class: 'grow' }, 'New group'), h('span', { class: 'opt-note' }, 'organise trackers')),
+        showClassesOption ? h('button', {
+          class: 'opt',
+          onclick: () => {
+            api.close();
+            store.setClassesHidden(false);
+            haptic(10);
+            toast('Classes card added back');
+          },
+        }, icon('cal'), h('span', { class: 'grow' }, 'Classes card'), h('span', { class: 'opt-note' }, 'show again')) : null,
         showNutritionOption ? h('button', {
           class: 'opt',
           onclick: () => {

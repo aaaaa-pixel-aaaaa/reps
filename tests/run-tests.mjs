@@ -12,6 +12,11 @@ import {
   DEFAULT_POMODORO_CYCLES_FOR_LONG_BREAK, weekProgress,
 } from '../js/model.js';
 import { createStore, normalizeState, validateImport, seedState, demoState } from '../js/store.js';
+import {
+  fmtTime12, addMinutesToTime, classEndTime, classTimeRange, classOccursOn,
+  isClassDone, classesForDay, classesOccurringOn, dayAttendance, todayClassSummary,
+  classDayStatus, nextOccurrence, classStats, allClassesStats,
+} from '../js/classes.js';
 import { pinnedTrackers, groupTrackers, reorderContext } from '../js/model.js';
 import { wrapDelta, stepsFor, angleAt } from '../js/wheel.js';
 import {
@@ -1327,6 +1332,165 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
   eq(store.state.trackers[plainId].pomodoro.phase, null, 'Pomodoro disabled: no phase ever starts');
   store.state.timers[plainId].startedAt = Date.now() - 42.5 * 60000;
   eq(store.stopTimer(plainId, '2026-07-14'), 43, 'plain timer still logs the whole elapsed session, unchanged behaviour');
+}
+
+// ---------- classes: pure logic ----------
+{
+  eq(fmtTime12('09:00'), '9:00 am', 'fmtTime12 morning');
+  eq(fmtTime12('13:05'), '1:05 pm', 'fmtTime12 afternoon');
+  eq(fmtTime12('00:30'), '12:30 am', 'fmtTime12 midnight hour');
+  eq(fmtTime12('12:00'), '12:00 pm', 'fmtTime12 noon');
+
+  eq(addMinutesToTime('09:00', 90), '10:30', 'addMinutesToTime plain');
+  eq(addMinutesToTime('23:30', 60), '00:30', 'addMinutesToTime wraps past midnight');
+
+  const cls = {
+    id: 'c1', name: 'Data Structures', days: [0, 2], startTime: '09:00', durationMins: 60,
+    createdAt: '2026-07-01', startDate: null, endDate: null,
+  };
+  eq(classEndTime(cls), '10:00', 'classEndTime adds duration');
+  eq(classTimeRange(cls), '9:00 am – 10:00 am', 'classTimeRange formats both ends');
+
+  eq(classOccursOn(cls, '2026-07-13'), true, 'Monday matches days[0]');
+  eq(classOccursOn(cls, '2026-07-14'), false, 'Tuesday does not match');
+  eq(classOccursOn(cls, '2026-07-15'), true, 'Wednesday matches days[2]');
+
+  const bounded = { ...cls, startDate: '2026-08-01', endDate: '2026-08-31' };
+  eq(classOccursOn(bounded, '2026-07-13'), false, 'before startDate: no occurrence');
+  eq(classOccursOn(bounded, '2026-08-03'), true, 'inside range: occurs (Monday 3 Aug)');
+  eq(classOccursOn(bounded, '2026-09-07'), false, 'after endDate: no occurrence');
+  // archived is ignored by classOccursOn on purpose — history must still
+  // judge past occurrences of a class you've since archived.
+  eq(classOccursOn({ ...cls, archived: true }, '2026-07-13'), true, 'archived does not affect occurrence');
+
+  const classDays = {
+    '2026-07-13': { c1: { done: true } },
+    '2026-07-15': { c1: { done: true } },
+  };
+  eq(isClassDone(classDays, '2026-07-13', 'c1'), true, 'marked day reads done');
+  eq(isClassDone(classDays, '2026-07-14', 'c1'), false, 'unmarked day reads not done');
+  eq(isClassDone({}, '2026-07-13', 'c1'), false, 'no classDays at all: not done');
+
+  const classes = {
+    c1: cls,
+    c2: { id: 'c2', name: 'Algorithms', days: [0], startTime: '11:00', durationMins: 30, createdAt: '2026-07-01' },
+    c3: { id: 'c3', name: 'Archived class', days: [0], startTime: '08:00', durationMins: 30, createdAt: '2026-07-01', archived: true },
+  };
+  const monday = classesForDay(classes, '2026-07-13');
+  eq(monday.map((c) => c.id), ['c1', 'c2'], 'sorted by start time, archived excluded');
+  eq(classesForDay(classes, '2026-07-14'), [], 'Tuesday: neither class meets');
+  eq(classesOccurringOn(classes, '2026-07-13').map((c) => c.id), ['c3', 'c1', 'c2'],
+    'classesOccurringOn includes archived, unlike classesForDay (sorted by start time: c3 08:00, c1 09:00, c2 11:00)');
+
+  eq(todayClassSummary(classes, classDays, '2026-07-13'), { total: 2, done: 1 }, 'today summary counts done vs total');
+
+  eq(dayAttendance(classes, classDays, '2026-07-13'), { scheduled: 3, attended: 1, ratio: 1 / 3 },
+    'dayAttendance blends every class scheduled that day, archived included');
+  eq(dayAttendance(classes, classDays, '2026-07-14'), { scheduled: 0, attended: 0, ratio: null },
+    'no classes that day: ratio is null, not zero');
+
+  eq(classDayStatus(cls, classDays, '2026-07-13', '2026-07-20'), 'hit', 'attended day is hit');
+  eq(classDayStatus(cls, classDays, '2026-07-20', '2026-07-21'), 'miss', 'past occurrence, not attended: miss');
+  eq(classDayStatus(cls, classDays, '2026-07-20', '2026-07-18'), 'future', 'after today: future');
+  eq(classDayStatus(cls, classDays, '2026-07-27', '2026-07-27'), 'pending', 'today, not yet marked: pending');
+  eq(classDayStatus(cls, classDays, '2026-07-14', '2026-07-20'), 'empty', 'non-occurrence day: empty');
+  eq(classDayStatus(cls, classDays, '2026-06-01', '2026-07-20'), 'empty', 'before createdAt: empty even if weekday matches');
+
+  eq(nextOccurrence(cls, '2026-07-14'), '2026-07-15', 'next occurrence after Tuesday is Wednesday');
+  eq(nextOccurrence(cls, '2026-07-13'), '2026-07-13', 'next occurrence is inclusive of a matching start day');
+  eq(nextOccurrence(bounded, '2026-09-01'), null, 'no occurrence left after endDate has passed');
+
+  // classStats: Mon/Wed for three weeks (13 Jul .. 27 Jul), one miss on the
+  // second Monday, "today" mid-stream so it doesn't force a premature streak break.
+  const statCls = { id: 'sc', name: 'Stats', days: [0, 2], startTime: '09:00', durationMins: 60, createdAt: '2026-07-13' };
+  const statDays = {
+    '2026-07-13': { sc: { done: true } }, // Mon wk1 - hit
+    '2026-07-15': { sc: { done: true } }, // Wed wk1 - hit
+    // '2026-07-20' Mon wk2 - missed
+    '2026-07-22': { sc: { done: true } }, // Wed wk2 - hit
+    '2026-07-27': { sc: { done: true } }, // Mon wk3 (today) - hit
+  };
+  const stats = classStats(statCls, statDays, '2026-07-27');
+  eq(stats.scheduled, 5, 'five occurrences from creation through today');
+  eq(stats.attended, 4, 'four attended, one missed');
+  eq(stats.currentStreak, 2, 'streak counts back from today through the miss');
+  eq(stats.longestStreak, 2, 'longest run is the first two before the miss');
+
+  const neverMet = classStats({ ...statCls, createdAt: '2026-07-27' }, {}, '2026-07-13');
+  eq(neverMet, { scheduled: 0, attended: 0, currentStreak: 0, longestStreak: 0 }, 'createdAt after today: no stats yet');
+
+  // allClassesStats: two classes both created 2026-07-13. Mon-only "A" and
+  // Mon+Wed "B" over the same three weeks; one Monday (07-20) both classes
+  // ran but only B was attended, so that day isn't "perfect" and breaks
+  // the streak of fully-attended days.
+  const classA = { id: 'A', days: [0], startTime: '09:00', durationMins: 60, createdAt: '2026-07-13' };
+  const classB = { id: 'B', days: [0, 2], startTime: '11:00', durationMins: 60, createdAt: '2026-07-13' };
+  const allClasses = { A: classA, B: classB };
+  const allDays = {
+    '2026-07-13': { A: { done: true }, B: { done: true } }, // Mon wk1: perfect
+    '2026-07-15': { B: { done: true } },                    // Wed wk1: B only scheduled, attended
+    '2026-07-20': { B: { done: true } },                    // Mon wk2: A missed, B attended — not perfect
+    '2026-07-22': { B: { done: true } },                    // Wed wk2: attended
+    '2026-07-27': { A: { done: true }, B: { done: true } }, // Mon wk3 (today): perfect
+  };
+  const allStats = allClassesStats(allClasses, allDays, '2026-07-27');
+  // scheduled: Mon(A+B)x3 + Wed(B)x2 = 6 + 2 = 8; attended: all logged above = 7
+  eq(allStats.scheduled, 8, 'scheduled sums every class on every occurrence day');
+  eq(allStats.attended, 7, 'attended sums every logged class');
+  eq(allStats.currentStreak, 2, 'streak of perfect days counts back from today through the imperfect Monday');
+  eq(allStats.longestStreak, 2, 'longest run of perfect days is 2 (either wk1 Mon+Wed, or wk2-Wed through today)');
+
+  eq(allClassesStats({}, {}, '2026-07-13'), { scheduled: 0, attended: 0, currentStreak: 0, longestStreak: 0 },
+    'no classes at all: zeroed out, not an error');
+}
+
+// ---------- classes: store integration ----------
+{
+  const store = createStore({ storage: memStorage(), seed: () => seedState('2026-07-13') });
+  const studyId = store.addTracker({ name: 'Study', type: 'counter', time: true });
+  const classId = store.addClass({
+    name: 'Tutorial', days: [0], startTime: '14:00', durationMins: 120, linkedTrackerId: studyId,
+  });
+
+  eq(store.state.classes[classId].linkedTrackerId, studyId, 'link accepted for a time counter');
+
+  const nowDone = store.toggleClassDone(classId, '2026-07-13');
+  eq(nowDone, true, 'toggle marks attended');
+  eq(store.state.classDays['2026-07-13'][classId].done, true, 'attendance recorded');
+  eq(store.state.days['2026-07-13'][studyId].total, 120, 'linked tracker gains the class duration');
+
+  const nowUndone = store.toggleClassDone(classId, '2026-07-13');
+  eq(nowUndone, false, 'toggling again reverses attendance');
+  eq(store.state.classDays['2026-07-13'], undefined, 'empty attendance day cleaned up');
+  eq(store.state.days['2026-07-13'][studyId].total, 0,
+    'reversing attendance nets the linked total back to zero (the correction sets themselves stay, like any other undo)');
+
+  // Deleting the linked tracker clears the class's link rather than leaving
+  // a dangling reference.
+  store.toggleClassDone(classId, '2026-07-13');
+  store.deleteTracker(studyId);
+  eq(store.state.classes[classId].linkedTrackerId, null, 'link cleared when the linked tracker is deleted');
+
+  // Editing a linked tracker away from a time counter also clears the link.
+  const study2Id = store.addTracker({ name: 'Study2', type: 'counter', time: true });
+  store.updateClass(classId, { linkedTrackerId: study2Id });
+  eq(store.state.classes[classId].linkedTrackerId, study2Id, 'relinked to the new time counter');
+  store.updateTracker(study2Id, { time: false, unit: 'sessions' });
+  eq(store.state.classes[classId].linkedTrackerId, null, 'link cleared once the tracker stops being a time counter');
+
+  store.deleteClass(classId);
+  eq(store.state.classes[classId], undefined, 'deleteClass removes the class');
+
+  // Both optional wide tiles default to hidden unless explicitly shown.
+  const fresh = normalizeState({ trackers: { t: { id: 't', name: 'T', type: 'habit' } } });
+  eq(fresh.meta.nutritionHidden, true, 'nutrition tile hidden by default');
+  eq(fresh.meta.classesHidden, true, 'classes tile hidden by default');
+  const shown = normalizeState({
+    trackers: { t: { id: 't', name: 'T', type: 'habit' } },
+    meta: { nutritionHidden: false, classesHidden: false },
+  });
+  eq(shown.meta.nutritionHidden, false, 'an explicit false sticks for nutrition');
+  eq(shown.meta.classesHidden, false, 'an explicit false sticks for classes');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

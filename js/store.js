@@ -2,7 +2,7 @@
 // localStorage under one key; every mutation goes through commit() which
 // re-normalizes touched entries, saves, and notifies subscribers.
 
-import { todayKey, isValidKey, addDays, parseKey } from './dates.js';
+import { todayKey, isValidKey, addDays, parseKey, weekdayIndex } from './dates.js';
 import { roundAmount, isHit, pomodoroWorkElapsedMs, advancePomodoro, skipPomodoro } from './model.js';
 
 // Timestamp for a set logged against dateKey: real time for today, a
@@ -124,6 +124,36 @@ function normalizeTracker(raw, i) {
   return t;
 }
 
+// A recurring weekly class: `days` are weekday indices (dates.js's
+// Monday=0..Sunday=6), `startTime` is "HH:MM" 24h. `startDate`/`endDate`
+// are both optional — left null the class repeats forever, matching how a
+// tracker never has a built-in end date either. `linkedTrackerId` is
+// validated against the live tracker map by the caller (normalizeState on
+// load, commit() at runtime), never here, since this function has no
+// access to the tracker map.
+function normalizeClass(raw, i) {
+  if (!raw || typeof raw !== 'object') return null;
+  const days = Array.isArray(raw.days)
+    ? [...new Set(raw.days.map((d) => Math.round(num(d, -1))).filter((d) => d >= 0 && d <= 6))].sort((a, b) => a - b)
+    : [];
+  const createdAt = isValidKey(raw.createdAt) ? raw.createdAt : todayKey();
+  return {
+    id: str(raw.id) || genId('c'),
+    name: str(raw.name, 'Class').slice(0, 60) || 'Class',
+    color: str(raw.color, PALETTE[i % PALETTE.length]),
+    days,
+    startTime: /^\d{2}:\d{2}$/.test(raw.startTime) ? raw.startTime : '09:00',
+    durationMins: Math.max(5, Math.round(num(raw.durationMins, 60))),
+    location: str(raw.location, '').slice(0, 60),
+    linkedTrackerId: str(raw.linkedTrackerId) || null,
+    startDate: isValidKey(raw.startDate) ? raw.startDate : null,
+    endDate: isValidKey(raw.endDate) ? raw.endDate : null,
+    archived: !!raw.archived,
+    order: num(raw.order, i),
+    createdAt,
+  };
+}
+
 function normalizeGroup(raw, i) {
   if (!raw || typeof raw !== 'object') return null;
   return {
@@ -167,7 +197,7 @@ function recomputeTotal(tracker, sets) {
 
 export function normalizeState(raw) {
   const src = raw && typeof raw === 'object' ? raw : {};
-  const state = { schema: SCHEMA, trackers: {}, groups: {}, days: {}, meta: {} };
+  const state = { schema: SCHEMA, trackers: {}, groups: {}, days: {}, classes: {}, classDays: {}, meta: {} };
 
   const groupsSrc = src.groups && typeof src.groups === 'object' ? src.groups : {};
   let gi = 0;
@@ -200,11 +230,40 @@ export function normalizeState(raw) {
     if (Object.keys(day).length) state.days[dateKey] = day;
   }
 
+  const classesSrc = src.classes && typeof src.classes === 'object' ? src.classes : {};
+  let ci = 0;
+  for (const key in classesSrc) {
+    const c = normalizeClass(classesSrc[key], ci++);
+    if (!c) continue;
+    if (c.linkedTrackerId) {
+      const lt = state.trackers[c.linkedTrackerId];
+      if (!lt || lt.type !== 'counter' || !lt.time) c.linkedTrackerId = null;
+    }
+    state.classes[c.id] = c;
+  }
+
+  const classDaysSrc = src.classDays && typeof src.classDays === 'object' ? src.classDays : {};
+  for (const dateKey in classDaysSrc) {
+    if (!isValidKey(dateKey)) continue;
+    const daySrc = classDaysSrc[dateKey];
+    if (!daySrc || typeof daySrc !== 'object') continue;
+    const day = {};
+    for (const cid in daySrc) {
+      if (state.classes[cid] && daySrc[cid] && daySrc[cid].done) day[cid] = { done: true };
+    }
+    if (Object.keys(day).length) state.classDays[dateKey] = day;
+  }
+
+  // Both optional wide home-screen tiles default to hidden unless a prior
+  // explicit choice says otherwise — undefined ("never touched") reads as
+  // hidden, but an explicit `false` (the user picked "show again" at some
+  // point) sticks, same as an explicit `true` sticks.
   const metaSrc = src.meta && typeof src.meta === 'object' ? src.meta : {};
   state.meta = {
     lastBackup: isValidKey(metaSrc.lastBackup) ? metaSrc.lastBackup : null,
     createdAt: isValidKey(metaSrc.createdAt) ? metaSrc.createdAt : todayKey(),
-    nutritionHidden: !!metaSrc.nutritionHidden,
+    nutritionHidden: metaSrc.nutritionHidden == null ? true : !!metaSrc.nutritionHidden,
+    classesHidden: metaSrc.classesHidden == null ? true : !!metaSrc.classesHidden,
   };
 
   // Live timers: a plain timestamp per tracker. Surviving a reload/backgrounded
@@ -242,7 +301,10 @@ export function validateImport(obj) {
   return {
     ok: true,
     data,
-    summary: { trackers, groups: Object.keys(data.groups).length, days: dayCount, sets },
+    summary: {
+      trackers, groups: Object.keys(data.groups).length, days: dayCount, sets,
+      classes: Object.keys(data.classes).length,
+    },
   };
 }
 
@@ -313,15 +375,55 @@ export function demoState(today = todayKey()) {
     id: 't_water', name: 'Water', color: '#FFB454', type: 'counter',
     order: 6, unit: 'glasses', target: { base: 8 }, chips: [1, 2], createdAt: start,
   };
+  raw.trackers.t_study = {
+    id: 't_study', name: 'Study', color: '#F27E9D', type: 'counter',
+    groupId: 'g_mind', order: 7, time: true, target: { base: 90 },
+    chips: [15, 30, 60], createdAt: start,
+  };
+
+  // A small demo timetable showing the Classes card off the shelf: a
+  // twice-weekly lecture, a tutorial linked to Study (so attending it adds
+  // its minutes there automatically), and an unlinked lab.
+  raw.classes = {
+    c_datastruct: {
+      id: 'c_datastruct', name: 'Data Structures', color: '#FF8A3D',
+      days: [0, 2], startTime: '09:00', durationMins: 60,
+      location: 'Building 4, Rm 12', linkedTrackerId: null, createdAt: start, order: 0,
+    },
+    c_algo_tut: {
+      id: 'c_algo_tut', name: 'Algorithms Tutorial', color: '#8E7CC3',
+      days: [3], startTime: '14:00', durationMins: 120,
+      location: 'Lab 3', linkedTrackerId: 't_study', createdAt: start, order: 1,
+    },
+    c_physlab: {
+      id: 'c_physlab', name: 'Physics Lab', color: '#64B5A6',
+      days: [4], startTime: '13:00', durationMins: 120,
+      location: 'Building 7', linkedTrackerId: null, createdAt: start, order: 2,
+    },
+  };
 
   const days = {};
+  const classDays = {};
   const put = (key, tid, entry) => {
     (days[key] = days[key] || {})[tid] = entry;
+  };
+  const putClass = (key, cid) => {
+    (classDays[key] = classDays[key] || {})[cid] = { done: true };
   };
   const noonOf = (key, i) => new Date(...key.split('-').map(Number).map((v, j) => (j === 1 ? v - 1 : v))).getTime() + (12 * 3600 + i * 900) * 1000;
   const counterDay = (key, tid, amounts) => {
     const sets = amounts.map((a, i) => ({ a, t: noonOf(key, i) }));
     put(key, tid, { sets, total: 0 });
+  };
+  // Appends rather than replaces — t_study can be topped up twice in one
+  // day (a linked tutorial plus independent study), and a plain counterDay
+  // call would clobber whichever happened first.
+  const addSets = (key, tid, amounts) => {
+    const day = days[key] || {};
+    const existing = (day[tid] && day[tid].sets) || [];
+    const sets = [...existing, ...amounts.map((a, i) => ({ a, t: noonOf(key, existing.length + i) }))];
+    days[key] = day;
+    day[tid] = { sets, total: 0 };
   };
 
   for (let off = SPAN; off >= 0; off--) {
@@ -355,9 +457,27 @@ export function demoState(today = todayKey()) {
     // Habits.
     if (rand() < 0.8) put(key, 't_stretch', { done: true });
     if (rand() < 0.65) put(key, 't_meditate', { count: rand() < 0.6 ? 2 : 1 });
+
+    // Classes: mostly attended, occasionally skipped (never "today", which
+    // starts unmarked so the tile has something to check off live).
+    const wd = weekdayIndex(key);
+    if (!isToday) {
+      if ((wd === 0 || wd === 2) && rand() < 0.9) putClass(key, 'c_datastruct');
+      if (wd === 3 && rand() < 0.85) {
+        putClass(key, 'c_algo_tut');
+        addSets(key, 't_study', [120]); // the tutorial's own linked minutes
+      }
+      if (wd === 4 && rand() < 0.8) putClass(key, 'c_physlab');
+    }
+    // Some independent study time on top of whatever the tutorial added.
+    if (!isToday && rand() < 0.4) addSets(key, 't_study', [15 + Math.floor(rand() * 40)]);
   }
   raw.days = days;
-  raw.meta = { createdAt: start, lastBackup: addDays(today, -12) };
+  raw.classDays = classDays;
+  raw.meta = {
+    createdAt: start, lastBackup: addDays(today, -12),
+    nutritionHidden: false, classesHidden: false,
+  };
   return normalizeState(raw);
 }
 
@@ -383,7 +503,21 @@ export function createStore({ storage, key = STORAGE_KEY, seed = seedState } = {
     } catch (e) { /* quota errors: keep running in memory */ }
   }
 
+  // Only a live time counter is a valid link target. Re-checked on every
+  // commit (cheap — there are never many classes) rather than threaded
+  // through every place a tracker can change shape or disappear, so a
+  // class link can never point at a stale/invalid tracker no matter which
+  // mutation caused it (edited to Count, changed type, deleted, restored
+  // from a backup missing it).
+  function isValidLinkTarget(id) {
+    const t = state.trackers[id];
+    return !!(t && t.type === 'counter' && t.time);
+  }
+
   function commit() {
+    for (const c of Object.values(state.classes)) {
+      if (c.linkedTrackerId && !isValidLinkTarget(c.linkedTrackerId)) c.linkedTrackerId = null;
+    }
     save();
     for (const fn of listeners) fn();
   }
@@ -759,6 +893,65 @@ export function createStore({ storage, key = STORAGE_KEY, seed = seedState } = {
     setNutritionHidden(hidden) {
       state.meta.nutritionHidden = !!hidden;
       commit();
+    },
+    setClassesHidden(hidden) {
+      state.meta.classesHidden = !!hidden;
+      commit();
+    },
+
+    // -- classes --
+    addClass(fields) {
+      const c = normalizeClass(
+        { ...fields, id: genId('c'), order: nextOrder(state.classes) },
+        Object.keys(state.classes).length
+      );
+      state.classes[c.id] = c;
+      commit();
+      return c.id;
+    },
+    updateClass(id, patch) {
+      const cur = state.classes[id];
+      if (!cur) return;
+      const next = normalizeClass({ ...cur, ...patch, id }, 0);
+      next.order = cur.order;
+      state.classes[id] = next;
+      commit();
+    },
+    deleteClass(id) {
+      if (!state.classes[id]) return;
+      delete state.classes[id];
+      for (const dateKey of Object.keys(state.classDays)) {
+        delete state.classDays[dateKey][id];
+        if (!Object.keys(state.classDays[dateKey]).length) delete state.classDays[dateKey];
+      }
+      commit();
+    },
+    // Toggles today-or-any-day attendance. When the class links to a time
+    // counter, this is also the one place that logs to it: marking done
+    // appends +durationMins as a set on the linked tracker (dateKey, so a
+    // retro toggle logs against that day, not today); un-marking appends
+    // the matching negative — an additive correction, the same idiom
+    // logSet's own undo/minus-stepper use, rather than tracking which
+    // exact set to remove. Returns the class's new done state.
+    toggleClassDone(classId, dateKey, now = Date.now()) {
+      const c = state.classes[classId];
+      if (!c) return;
+      const day = state.classDays[dateKey] || (state.classDays[dateKey] = {});
+      const nowDone = !(day[classId] && day[classId].done);
+      if (nowDone) day[classId] = { done: true }; else delete day[classId];
+      if (!Object.keys(day).length) delete state.classDays[dateKey];
+
+      const linked = c.linkedTrackerId && tracker(c.linkedTrackerId);
+      if (linked && linked.type === 'counter' && linked.time) {
+        const entry = dayEntry(dateKey, linked.id, true);
+        const tMs = stampFor(dateKey, entry, now);
+        const amount = roundAmount(linked, nowDone ? c.durationMins : -c.durationMins);
+        entry.sets.push({ a: amount, t: tMs });
+        entry.total = recomputeTotal(linked, entry.sets);
+        cleanupDay(dateKey, linked.id);
+      }
+      commit();
+      return nowDone;
     },
     replaceAll(data) {
       state = normalizeState(data);
