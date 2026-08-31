@@ -68,6 +68,7 @@ Two new top-level collections alongside `trackers`/`groups`/`days`:
 "classes": {
   "<id>": {
     "name", "color", "days": [0, 2],      // Monday=0 .. Sunday=6, dates.js's convention
+    "date": "optional YYYY-MM-DD — set instead of days for a one-off event",
     "startTime": "09:00", "durationMins": 60,
     "location": "optional, free text",
     "linkedTrackerId": "optional, a Time-measured counter's id",
@@ -87,6 +88,18 @@ appearing on the tile (`classOccursOn`, `js/classes.js`), though its past
 attendance stays fully visible in its own history page. `classDays` only
 ever holds `true` entries — the same "presence means it happened, absence
 means nothing was logged" shape a tracker's own `days` entries use.
+
+### Events (one-off classes)
+
+The editor's "repeats" toggle ("Every week" / "Just once") is the only
+difference between a class and an **event** — picking "Just once" sets
+`date` to a single day instead of `days`, and `classOccursOn` treats that as
+the whole schedule: it meets on that exact date and never again, full stop,
+ignoring `days`/`startDate`/`endDate` entirely (`normalizeClass` keeps them
+empty too, so stored data never carries two conflicting ideas of when the
+thing happens). Everything else — time, duration, location, linking,
+colour, its own history page — works identically, since none of it cares
+whether an occurrence came from a weekday match or a single fixed date.
 
 ### Linking to a timer
 

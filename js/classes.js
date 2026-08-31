@@ -36,14 +36,22 @@ export function classTimeRange(cls) {
   return `${fmtTime12(cls.startTime)} – ${fmtTime12(classEndTime(cls))}`;
 }
 
-// Does this class meet on this calendar day at all — weekday matches and
-// (if set) the date falls inside its start/end range. Ignores `archived`
-// on purpose: history needs to judge past occurrences of a class you've
-// since archived exactly as it always did.
+// Does this class meet on this calendar day at all. A one-off event (`date`
+// set) meets only on that exact date, full stop — `days`/`startDate`/
+// `endDate` are meaningless for it and normalizeClass keeps them empty.
+// Otherwise: weekday matches and (if set) the date falls inside its
+// start/end range. Ignores `archived` on purpose: history needs to judge
+// past occurrences of a class you've since archived exactly as it always
+// did.
 export function classOccursOn(cls, dateKey) {
+  if (cls.date) return dateKey === cls.date;
   if (cls.startDate && dateKey < cls.startDate) return false;
   if (cls.endDate && dateKey > cls.endDate) return false;
   return cls.days.includes(weekdayIndex(dateKey));
+}
+
+export function isOneOff(cls) {
+  return !!cls.date;
 }
 
 export function isClassDone(classDays, dateKey, classId) {

@@ -1419,6 +1419,22 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
   const neverMet = classStats({ ...statCls, createdAt: '2026-07-27' }, {}, '2026-07-13');
   eq(neverMet, { scheduled: 0, attended: 0, currentStreak: 0, longestStreak: 0 }, 'createdAt after today: no stats yet');
 
+  // one-off events: `date` set means the class meets exactly once, on that
+  // date, regardless of `days`/`startDate`/`endDate` (normalizeClass keeps
+  // those empty, but classOccursOn ignores them either way as a safety net).
+  const event = {
+    id: 'ev', name: 'Guest lecture', days: [0, 2, 4], startTime: '10:00', durationMins: 90,
+    createdAt: '2026-07-01', date: '2026-07-16', startDate: '2026-01-01', endDate: '2026-12-31',
+  };
+  eq(classOccursOn(event, '2026-07-16'), true, 'one-off event occurs on its exact date');
+  eq(classOccursOn(event, '2026-07-13'), false, 'one-off event does not occur on a day matching its (ignored) days array');
+  eq(classOccursOn(event, '2026-07-17'), false, 'one-off event does not occur the day after either');
+  const eventStats = classStats(event, { '2026-07-16': { ev: { done: true } } }, '2026-07-20');
+  eq(eventStats, { scheduled: 1, attended: 1, currentStreak: 1, longestStreak: 1 },
+    'a one-off event contributes exactly one occurrence to its own stats');
+  eq(nextOccurrence(event, '2026-07-01'), '2026-07-16', 'nextOccurrence finds a future one-off event');
+  eq(nextOccurrence(event, '2026-07-17'), null, 'nextOccurrence finds nothing once a one-off event has passed');
+
   // allClassesStats: two classes both created 2026-07-13. Mon-only "A" and
   // Mon+Wed "B" over the same three weeks; one Monday (07-20) both classes
   // ran but only B was attended, so that day isn't "perfect" and breaks
@@ -1453,6 +1469,18 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
   });
 
   eq(store.state.classes[classId].linkedTrackerId, studyId, 'link accepted for a time counter');
+
+  // A one-off event strips any days/startDate/endDate it was (wrongly)
+  // given — normalizeClass's job, so stored data never carries two
+  // conflicting ideas of when the thing happens.
+  const eventId = store.addClass({
+    name: 'Exam', date: '2026-08-01', days: [1, 3], startDate: '2026-01-01', endDate: '2026-12-31', durationMins: 120,
+  });
+  const savedEvent = store.state.classes[eventId];
+  eq(savedEvent.date, '2026-08-01', 'one-off date accepted');
+  eq(savedEvent.days, [], 'days cleared for a one-off event');
+  eq(savedEvent.startDate, null, 'startDate cleared for a one-off event');
+  eq(savedEvent.endDate, null, 'endDate cleared for a one-off event');
 
   const nowDone = store.toggleClassDone(classId, '2026-07-13');
   eq(nowDone, true, 'toggle marks attended');

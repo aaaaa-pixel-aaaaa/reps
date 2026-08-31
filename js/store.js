@@ -124,16 +124,20 @@ function normalizeTracker(raw, i) {
   return t;
 }
 
-// A recurring weekly class: `days` are weekday indices (dates.js's
-// Monday=0..Sunday=6), `startTime` is "HH:MM" 24h. `startDate`/`endDate`
-// are both optional — left null the class repeats forever, matching how a
-// tracker never has a built-in end date either. `linkedTrackerId` is
-// validated against the live tracker map by the caller (normalizeState on
-// load, commit() at runtime), never here, since this function has no
-// access to the tracker map.
+// A recurring weekly class, OR a one-off event when `date` is set — in
+// that case `days`/`startDate`/`endDate` are meaningless (classOccursOn
+// ignores them) and kept empty here so stored data never has two
+// conflicting ideas of when the thing happens. `days` are weekday indices
+// (dates.js's Monday=0..Sunday=6), `startTime` is "HH:MM" 24h.
+// `startDate`/`endDate` are both optional — left null a recurring class
+// repeats forever, matching how a tracker never has a built-in end date
+// either. `linkedTrackerId` is validated against the live tracker map by
+// the caller (normalizeState on load, commit() at runtime), never here,
+// since this function has no access to the tracker map.
 function normalizeClass(raw, i) {
   if (!raw || typeof raw !== 'object') return null;
-  const days = Array.isArray(raw.days)
+  const date = isValidKey(raw.date) ? raw.date : null;
+  const days = !date && Array.isArray(raw.days)
     ? [...new Set(raw.days.map((d) => Math.round(num(d, -1))).filter((d) => d >= 0 && d <= 6))].sort((a, b) => a - b)
     : [];
   const createdAt = isValidKey(raw.createdAt) ? raw.createdAt : todayKey();
@@ -142,12 +146,13 @@ function normalizeClass(raw, i) {
     name: str(raw.name, 'Class').slice(0, 60) || 'Class',
     color: str(raw.color, PALETTE[i % PALETTE.length]),
     days,
+    date,
     startTime: /^\d{2}:\d{2}$/.test(raw.startTime) ? raw.startTime : '09:00',
     durationMins: Math.max(5, Math.round(num(raw.durationMins, 60))),
     location: str(raw.location, '').slice(0, 60),
     linkedTrackerId: str(raw.linkedTrackerId) || null,
-    startDate: isValidKey(raw.startDate) ? raw.startDate : null,
-    endDate: isValidKey(raw.endDate) ? raw.endDate : null,
+    startDate: !date && isValidKey(raw.startDate) ? raw.startDate : null,
+    endDate: !date && isValidKey(raw.endDate) ? raw.endDate : null,
     archived: !!raw.archived,
     order: num(raw.order, i),
     createdAt,

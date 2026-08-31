@@ -3,6 +3,9 @@
 // history page with a month calendar of attended/missed days — the same
 // shape as a tracker's own history page, since a class's attendance is
 // fundamentally a habit that only obligates you on some days of the week.
+// A class can also be a one-off "event" (no weekday set, just a single
+// date) — everything else about it works identically, since classOccursOn
+// is the only place that distinction is resolved.
 
 import {
   todayKey, monthOf, addMonths, cmpMonth, monthGrid, monthLabel, shortDate,
@@ -15,8 +18,8 @@ import {
   classDayStatus, nextOccurrence, classStats, allClassesStats,
 } from '../classes.js';
 import { PALETTE } from '../store.js';
-import { h, icon, accentStyle, rgba, haptic, openSheet, confirmSheet, toast } from '../ui.js';
-import { field, switchRow, swatchPicker, escapeHtml } from './editors.js';
+import { h, icon, accentStyle, rgba, haptic, openSheet, closeAllSheets, confirmSheet, toast } from '../ui.js';
+import { field, switchRow, swatchPicker, segmented, escapeHtml } from './editors.js';
 
 // ---- home tile ----
 
@@ -68,7 +71,7 @@ export function renderClassesTile(store) {
     ? h('button', { class: 'add-btn', style: 'margin-top:2px', onclick: () => openClassEditor(store) },
         icon('plus'), 'Add a class')
     : total === 0
-      ? h('div', { class: 'empty-note', style: 'padding:8px 2px 0;font-size:13.5px' }, 'Enjoy the day off.')
+      ? null
       : h('div', { class: 'class-list' }, list.map((c) => classRow(store, c, today)));
 
   return h('div', { class: 'card classes-card' },
@@ -89,13 +92,17 @@ export function renderClassesTile(store) {
 
 // ---- manage sheet (list + add + hide) ----
 
+function classDaysLabel(c) {
+  if (c.date) return `Once · ${shortDate(c.date)}`;
+  return c.days.length === 7 ? 'Every day' : c.days.map((d) => WEEKDAYS_MIN[d]).join('');
+}
+
 function classOptRow(store, c, onChange) {
-  const daysLabel = c.days.length === 7 ? 'Every day' : c.days.map((d) => WEEKDAYS_MIN[d]).join('');
   return h('button', { class: 'opt', onclick: () => openClassOptions(store, c.id, onChange) },
     h('span', { class: 'group-dot', style: `background:${c.color}` }),
     h('span', { class: 'grow' },
       h('div', {}, c.name),
-      h('div', { class: 'opt-note', style: 'margin-top:2px' }, `${daysLabel} · ${fmtTime12(c.startTime)}`)));
+      h('div', { class: 'opt-note', style: 'margin-top:2px' }, `${classDaysLabel(c)} · ${fmtTime12(c.startTime)}`)));
 }
 
 export function openClassesOptions(store) {
@@ -110,8 +117,12 @@ export function openClassesOptions(store) {
 
         const sections = [
           h('div', { class: 'opt-list' }, [
+            h('button', {
+              class: 'opt',
+              onclick: () => { closeAllSheets(); location.hash = 'classes'; },
+            }, icon('cal'), h('span', { class: 'grow' }, 'All classes history')),
             h('button', { class: 'opt', onclick: () => openClassEditor(store, null, rebuild) },
-              icon('plus'), h('span', { class: 'grow' }, 'New class')),
+              icon('plus'), h('span', { class: 'grow' }, 'New class or event')),
             ...active.map((c) => classOptRow(store, c, rebuild)),
           ]),
         ];
@@ -161,7 +172,11 @@ export function openClassOptions(store, classId, onChange) {
           icon(ic), h('span', { class: 'grow' }, label));
 
       body.append(h('div', { class: 'opt-list' },
-        opt('cal', 'History & attendance', () => { api.close(); location.hash = `classes/${classId}`; }),
+        // closeAllSheets, not api.close: this sheet is commonly reached
+        // through the manage sheet (dots -> Classes -> a class row), which
+        // would otherwise stay open, floating over the history page this
+        // navigates to.
+        opt('cal', 'History & attendance', () => { closeAllSheets(); location.hash = `classes/${classId}`; }),
         opt('pencil', 'Edit', () => { api.close(); openClassEditor(store, classId, onChange); }),
         opt(c.archived ? 'archive' : 'archive', c.archived ? 'Restore' : 'Archive', () => {
           const cur = store.state.classes[classId];
@@ -203,7 +218,7 @@ export function openClassEditor(store, classId = null, onSaved = null) {
     ? JSON.parse(JSON.stringify(existing))
     : {
         name: '', color: PALETTE[Object.keys(store.state.classes).length % PALETTE.length],
-        days: [], startTime: '09:00', durationMins: 60, location: '',
+        days: [], date: null, startTime: '09:00', durationMins: 60, location: '',
         linkedTrackerId: null, startDate: null, endDate: null,
       };
 
@@ -216,19 +231,6 @@ export function openClassEditor(store, classId = null, onSaved = null) {
       const nameInput = h('input', { class: 'input', type: 'text', maxlength: '60', placeholder: 'e.g. Data Structures' });
       nameInput.value = f.name;
       nameInput.addEventListener('input', () => { f.name = nameInput.value; });
-
-      const dayBtns = WEEKDAYS_MIN.map((label, i) => h('button', {
-        class: `dp-btn ${f.days.includes(i) ? 'on' : ''}`,
-        type: 'button',
-        'aria-pressed': String(f.days.includes(i)),
-        'aria-label': WEEKDAYS[i],
-        onclick: (e) => {
-          f.days = f.days.includes(i) ? f.days.filter((d) => d !== i) : [...f.days, i].sort((x, y) => x - y);
-          e.currentTarget.classList.toggle('on');
-          e.currentTarget.setAttribute('aria-pressed', String(f.days.includes(i)));
-          haptic(6);
-        },
-      }, label));
 
       const timeHint = h('div', { class: 'hint', style: 'margin-top:-6px' });
       const updateTimeHint = () => {
@@ -282,12 +284,55 @@ export function openClassEditor(store, classId = null, onSaved = null) {
           rangeFields,
         ].filter(Boolean));
       }
-      renderRange();
+
+      // Repeats every week (a weekday picker, plus the optional semester
+      // range above) or just once (a single date) — an event is simply a
+      // class with `date` set instead of `days`, so everything else about
+      // it (time, duration, location, linking, colour, history) is shared.
+      const scheduleBox = h('div', {});
+      function renderSchedule() {
+        const once = !!f.date;
+        const repeatsToggle = field('repeats', segmented([
+          { value: 'weekly', label: 'Every week' },
+          { value: 'once', label: 'Just once' },
+        ], once ? 'once' : 'weekly', (v) => {
+          if (v === 'once') { f.date = f.date || todayKey(); f.days = []; f.startDate = null; f.endDate = null; }
+          else { f.date = null; }
+          renderSchedule();
+        }));
+
+        if (once) {
+          const dateInput = h('input', { class: 'input num', type: 'date' });
+          dateInput.value = f.date;
+          dateInput.addEventListener('input', () => { if (isValidKey(dateInput.value)) f.date = dateInput.value; });
+          scheduleBox.replaceChildren(repeatsToggle, field('date', dateInput));
+          return;
+        }
+        const dayBtns = WEEKDAYS_MIN.map((label, i) => h('button', {
+          class: `dp-btn ${f.days.includes(i) ? 'on' : ''}`,
+          type: 'button',
+          'aria-pressed': String(f.days.includes(i)),
+          'aria-label': WEEKDAYS[i],
+          onclick: (e) => {
+            f.days = f.days.includes(i) ? f.days.filter((d) => d !== i) : [...f.days, i].sort((x, y) => x - y);
+            e.currentTarget.classList.toggle('on');
+            e.currentTarget.setAttribute('aria-pressed', String(f.days.includes(i)));
+            haptic(6);
+          },
+        }, label));
+        scheduleBox.replaceChildren(
+          repeatsToggle,
+          field('days', h('div', { class: 'daypicker' }, dayBtns), 'tap every day it meets'),
+          rangeBox,
+        );
+        renderRange();
+      }
+      renderSchedule();
 
       body.append(...[
         field('name', nameInput),
         field('colour', swatchPicker(f.color, (c) => { f.color = c; api.setAccent(c); })),
-        field('days', h('div', { class: 'daypicker' }, dayBtns), 'tap every day it meets'),
+        scheduleBox,
         h('div', { class: 'field-row' },
           field('starts', startInput),
           field('duration (min)', durInput)),
@@ -297,13 +342,12 @@ export function openClassEditor(store, classId = null, onSaved = null) {
           timeCounters.length
             ? 'Marking this class done also logs its duration to the linked tracker; un-marking reverses it.'
             : 'Create a time-based counter first (measures: Time) to link a class to it.'),
-        rangeBox,
         h('button', {
           class: 'btn btn-accent',
           style: 'margin-top:8px',
           onclick: () => {
             if (!f.name.trim()) { toast('Give it a name first'); return; }
-            if (!f.days.length) { toast('Pick at least one day'); return; }
+            if (!f.date && !f.days.length) { toast('Pick at least one day'); return; }
             if (existing) {
               store.updateClass(classId, f);
               toast('Saved');
@@ -356,9 +400,11 @@ function classHero(store, c, today, stats) {
     leftEl = h('div', {
       class: 'habit-check', style: 'margin:0;width:88px;height:88px;color:var(--faint);pointer-events:none',
     }, icon('clock'));
-    line1 = next ? `Next: ${shortDate(next)}` : 'No upcoming classes';
+    line1 = next ? `Next: ${shortDate(next)}`
+      : c.date ? `Was on ${shortDate(c.date)}`
+      : 'No upcoming classes';
   }
-  const schedLine = `${c.days.map((d) => WEEKDAYS_MIN[d]).join('')} · ${classTimeRange(c)}${c.location ? ' · ' + c.location : ''}`;
+  const schedLine = `${classDaysLabel(c)} · ${classTimeRange(c)}${c.location ? ' · ' + c.location : ''}`;
 
   return h('div', { class: 'hero' },
     leftEl,
