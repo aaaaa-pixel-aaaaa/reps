@@ -806,12 +806,14 @@ export function createStore({ storage, key = STORAGE_KEY, seed = seedState } = {
     // interval anywhere — closing the app, locking the phone, or a service
     // worker restart can't lose it, only clearing storage can. When the
     // tracker has Pomodoro mode on, this also kicks off its first work
-    // phase — one Start button covers both the plain and Pomodoro cases.
-    startTimer(tid) {
+    // phase by default — pass `{ plain: true }` to skip that and run a
+    // bare live timer for just this session instead, without touching the
+    // tracker's own Pomodoro settings (it's still offered next time).
+    startTimer(tid, { plain = false } = {}) {
       const t = tracker(tid);
       if (!t || t.type !== 'counter' || !t.time || state.timers[tid]) return;
       state.timers[tid] = { startedAt: Date.now() };
-      if (t.pomodoro && t.pomodoro.enabled) {
+      if (!plain && t.pomodoro && t.pomodoro.enabled) {
         t.pomodoro.phase = 'work';
         t.pomodoro.phaseEndTimestamp = Date.now() + t.pomodoro.workMins * 60000;
         t.pomodoro.cyclesCompleted = 0;

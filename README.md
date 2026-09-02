@@ -439,6 +439,19 @@ work/break lengths (default 25/5 minutes), a long-break length (default
 15), and how often the long break kicks in (default every 4th work cycle,
 adjustable per tracker).
 
+### Skipping Pomodoro for one session
+
+Enabling Pomodoro doesn't remove the plain timer — the log sheet's "or
+track live" section offers **both** "Start Pomodoro" and "Plain timer"
+buttons once a tracker has it on, so a session that doesn't fit the
+work/break structure (a quick unstructured block, say) can still run as a
+bare live timer without touching the tracker's own Pomodoro settings for
+next time. `store.startTimer(tid, { plain: true })` is the one difference
+from a normal start: it skips initialising `pomodoro.phase`, so
+`stopTimer` sees no phase and logs the whole wall-clock elapsed time
+exactly like a Pomodoro-disabled tracker always has, rather than a
+work-only total.
+
 ### The timer keeps accumulating, Pomodoro just overlays phases
 
 Starting a Pomodoro-enabled tracker starts the same live timer every time

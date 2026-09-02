@@ -1326,6 +1326,17 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
   eq(store.state.trackers[tid].pomodoro.phase, null, 'phase cleared on cancel');
   eq(store.state.days['2026-07-14'][tid].total, 12, 'cancel logs nothing further — total unchanged from the earlier stop');
 
+  // { plain: true } lets a Pomodoro-enabled tracker run one plain session
+  // anyway — no phase starts, and stopping logs the whole wall-clock
+  // elapsed time (not a work-only Pomodoro total), without touching the
+  // tracker's own enabled/workMins/... settings for next time.
+  store.startTimer(tid, { plain: true });
+  eq(store.state.trackers[tid].pomodoro.phase, null, 'plain start skips Pomodoro phase even though it is enabled');
+  store.state.timers[tid].startedAt = Date.now() - 20 * 60000;
+  eq(store.stopTimer(tid, '2026-07-14'), 20, 'plain session logs the whole elapsed time, not a Pomodoro work-only total');
+  eq(store.state.trackers[tid].pomodoro.enabled, true, 'the tracker\'s Pomodoro setting is untouched by one plain session');
+  eq(store.state.days['2026-07-14'][tid].total, 32, 'the 20 plain minutes add to the earlier 12 (32 total)');
+
   // A tracker with Pomodoro disabled behaves exactly like the plain timer.
   const plainId = store.addTracker({ name: 'Read', type: 'counter', time: true });
   store.startTimer(plainId);

@@ -152,13 +152,24 @@ export function openLogSheet(store, trackerId, dateKey = todayKey()) {
             ),
           );
         } else {
+          const usesPomodoro = t.pomodoro && t.pomodoro.enabled;
           timerBox.className = 'timerbox';
           timerBox.replaceChildren(
             h('div', { class: 'timer-lbl' }, 'or track live'),
-            h('button', {
-              class: 'btn btn-ghost',
-              onclick: () => { store.startTimer(t.id); haptic(12); },
-            }, t.pomodoro && t.pomodoro.enabled ? 'Start Pomodoro' : 'Start timer'),
+            usesPomodoro
+              ? h('div', { class: 'btn-row', style: 'width:100%' },
+                  h('button', {
+                    class: 'btn btn-ghost',
+                    onclick: () => { store.startTimer(t.id); haptic(12); },
+                  }, 'Start Pomodoro'),
+                  h('button', {
+                    class: 'btn btn-ghost',
+                    onclick: () => { store.startTimer(t.id, { plain: true }); haptic(12); },
+                  }, 'Plain timer'))
+              : h('button', {
+                  class: 'btn btn-ghost',
+                  onclick: () => { store.startTimer(t.id); haptic(12); },
+                }, 'Start timer'),
           );
         }
       }
