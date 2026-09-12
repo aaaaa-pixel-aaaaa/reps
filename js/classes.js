@@ -8,7 +8,7 @@
 // functions one level up: an occurrence day, not every calendar day, is the
 // unit a class's streak counts over.
 
-import { addDays, todayKey, weekdayIndex } from './dates.js';
+import { addDays, todayKey, weekdayIndex, mondayOf } from './dates.js';
 
 const pad2 = (n) => String(n).padStart(2, '0');
 
@@ -56,15 +56,19 @@ export function classTimeFor(cls, dateKey) {
 
 // Does this class meet on this calendar day at all. A one-off event (`date`
 // set) meets only on that exact date, full stop — `days`/`startDate`/
-// `endDate` are meaningless for it and normalizeClass keeps them empty.
-// Otherwise: weekday matches and (if set) the date falls inside its
-// start/end range. Ignores `archived` on purpose: history needs to judge
-// past occurrences of a class you've since archived exactly as it always
-// did.
+// `endDate`/`offWeeks` are meaningless for it and normalizeClass keeps them
+// empty. Otherwise: weekday matches, the date falls inside its start/end
+// range, and its whole Monday-of-week isn't flagged an off week (a
+// semester break or public holiday week — the class simply didn't meet,
+// same as if it never existed for that week: it won't count toward
+// scheduled/attended, streaks, or the calendar). Ignores `archived` on
+// purpose: history needs to judge past occurrences of a class you've since
+// archived exactly as it always did.
 export function classOccursOn(cls, dateKey) {
   if (cls.date) return dateKey === cls.date;
   if (cls.startDate && dateKey < cls.startDate) return false;
   if (cls.endDate && dateKey > cls.endDate) return false;
+  if (cls.offWeeks && cls.offWeeks.includes(mondayOf(dateKey))) return false;
   return cls.days.includes(weekdayIndex(dateKey));
 }
 
@@ -122,10 +126,13 @@ export function classDayStatus(cls, classDays, dateKey, today = todayKey()) {
   return 'miss';
 }
 
-// The next occurrence on or after `from` (inclusive), searched up to a
-// year out — bounded so a class whose endDate has passed, or one with an
-// impossible schedule, doesn't spin forever.
+// The next occurrence on or after `from` (inclusive). A one-off (`date`
+// set — including an exam, which can sit years out) needs no search at
+// all; a recurring class is searched day by day, bounded to a year out so
+// one whose endDate has passed, or with an impossible schedule, doesn't
+// spin forever.
 export function nextOccurrence(cls, from = todayKey()) {
+  if (cls.date) return cls.date >= from ? cls.date : null;
   let d = from;
   for (let i = 0; i < 366; i++) {
     if (classOccursOn(cls, d)) return d;
@@ -172,6 +179,41 @@ export function classStats(cls, classDays, today = todayKey()) {
   }
   s.currentStreak = cur;
   return s;
+}
+
+// ---- exams ----
+// An exam is a one-off class (`date` set) flagged `isExam` for extra
+// visibility: brighter calendar cells and reminder notifications ahead of
+// the date, rather than attendance tracking day to day like a real class.
+
+// Preset reminder offsets (days before the exam date) offered in the
+// editor — a fixed menu rather than a free-typed number, since "3 days
+// before" covers what anyone actually wants and a bad free-typed value
+// could silently produce a reminder that never fires.
+export const EXAM_REMINDER_PRESETS = [
+  { days: 0, label: 'same day' },
+  { days: 1, label: '1 day before' },
+  { days: 3, label: '3 days before' },
+  { days: 7, label: '1 week before' },
+  { days: 14, label: '2 weeks before' },
+  { days: 30, label: '1 month before' },
+];
+
+// Every not-yet-happened exam, soonest first — the Classes card's own
+// "upcoming exams" list, since an exam (unlike a class) is worth surfacing
+// well before the day it actually falls on.
+export function upcomingExams(classes, today = todayKey()) {
+  return Object.values(classes)
+    .filter((c) => c.isExam && !c.archived && c.date >= today)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// "today" / "tomorrow" / "in 12 days" — the countdown copy for an upcoming
+// exam row and its reminder notifications alike.
+export function examCountdown(daysAway) {
+  if (daysAway <= 0) return 'today';
+  if (daysAway === 1) return 'tomorrow';
+  return `in ${daysAway} days`;
 }
 
 // All-time attendance across every class at once, for the "all classes"

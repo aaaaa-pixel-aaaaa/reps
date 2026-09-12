@@ -16,6 +16,7 @@ import {
   fmtTime12, addMinutesToTime, classEndTime, classTimeRange, classTimeForDay, classTimeFor,
   classOccursOn, isClassDone, classesForDay, classesOccurringOn, dayAttendance, todayClassSummary,
   classDayStatus, nextOccurrence, classStats, allClassesStats,
+  upcomingExams, examCountdown,
 } from '../js/classes.js';
 import { pinnedTrackers, groupTrackers, reorderContext } from '../js/model.js';
 import { wrapDelta, stepsFor, angleAt } from '../js/wheel.js';
@@ -1444,6 +1445,19 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
   eq(classTimeForDay({ ...varied, perDayTimes: null }, 2), { startTime: '09:00', durationMins: 60 },
     'no perDayTimes at all: every day falls back to the plain fields');
 
+  // off weeks: a recurring Mon/Wed class skips the week of 2026-07-20
+  // entirely (a semester break, say) — both that Monday and that
+  // Wednesday drop out as if the class never existed that week, while the
+  // weeks either side are untouched.
+  const offWeekCls = { id: 'ow', name: 'Off-week class', days: [0, 2], startTime: '09:00', durationMins: 60, createdAt: '2026-07-13', offWeeks: ['2026-07-20'] };
+  eq(classOccursOn(offWeekCls, '2026-07-13'), true, 'week before the off week: Monday still occurs');
+  eq(classOccursOn(offWeekCls, '2026-07-15'), true, 'week before the off week: Wednesday still occurs');
+  eq(classOccursOn(offWeekCls, '2026-07-20'), false, 'off week: Monday does not occur');
+  eq(classOccursOn(offWeekCls, '2026-07-22'), false, 'off week: Wednesday does not occur either, same week as the flagged Monday');
+  eq(classOccursOn(offWeekCls, '2026-07-27'), true, 'week after the off week: resumes');
+  const offWeekStats = classStats(offWeekCls, {}, '2026-07-27');
+  eq(offWeekStats.scheduled, 3, 'the off week\'s two occurrences are excluded from scheduled entirely, not just marked missed');
+
   // one-off events: `date` set means the class meets exactly once, on that
   // date, regardless of `days`/`startDate`/`endDate` (normalizeClass keeps
   // those empty, but classOccursOn ignores them either way as a safety net).
@@ -1459,6 +1473,28 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
     'a one-off event contributes exactly one occurrence to its own stats');
   eq(nextOccurrence(event, '2026-07-01'), '2026-07-16', 'nextOccurrence finds a future one-off event');
   eq(nextOccurrence(event, '2026-07-17'), null, 'nextOccurrence finds nothing once a one-off event has passed');
+
+  // A one-off dated far enough out (an exam, typically) used to fall
+  // through nextOccurrence's 366-day search loop and come back null even
+  // though it's a perfectly real future date — it's a direct date
+  // comparison, not a search, so distance doesn't matter.
+  const farExam = { id: 'fx', name: 'Finals', date: '2028-06-01', createdAt: '2026-07-01' };
+  eq(nextOccurrence(farExam, '2026-07-01'), '2028-06-01', 'nextOccurrence finds a one-off date years out, no search needed');
+
+  // upcomingExams/examCountdown: the Classes card's own "upcoming" list.
+  const examsById = {
+    past: { id: 'past', name: 'Past exam', date: '2026-07-01', isExam: true, archived: false },
+    today: { id: 'today', name: 'Today exam', date: '2026-07-13', isExam: true, archived: false },
+    soon: { id: 'soon', name: 'Soon exam', date: '2026-07-14', isExam: true, archived: false },
+    far: { id: 'far', name: 'Far exam', date: '2026-08-01', isExam: true, archived: false },
+    archivedExam: { id: 'archivedExam', name: 'Old exam', date: '2026-07-20', isExam: true, archived: true },
+    notExam: { id: 'notExam', name: 'Plain event', date: '2026-07-14', isExam: false, archived: false },
+  };
+  eq(upcomingExams(examsById, '2026-07-13').map((c) => c.id), ['today', 'soon', 'far'],
+    'upcomingExams: soonest first, past/archived/non-exam excluded, today included');
+  eq(examCountdown(0), 'today', 'examCountdown: 0 days away reads as today');
+  eq(examCountdown(1), 'tomorrow', 'examCountdown: 1 day away reads as tomorrow');
+  eq(examCountdown(5), 'in 5 days', 'examCountdown: further out spells out the day count');
 
   // allClassesStats: two classes both created 2026-07-13. Mon-only "A" and
   // Mon+Wed "B" over the same three weeks; one Monday (07-20) both classes
@@ -1500,12 +1536,24 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
   // conflicting ideas of when the thing happens.
   const eventId = store.addClass({
     name: 'Exam', date: '2026-08-01', days: [1, 3], startDate: '2026-01-01', endDate: '2026-12-31', durationMins: 120,
+    offWeeks: ['2026-07-20'],
   });
   const savedEvent = store.state.classes[eventId];
   eq(savedEvent.date, '2026-08-01', 'one-off date accepted');
   eq(savedEvent.days, [], 'days cleared for a one-off event');
   eq(savedEvent.startDate, null, 'startDate cleared for a one-off event');
   eq(savedEvent.endDate, null, 'endDate cleared for a one-off event');
+  eq(savedEvent.offWeeks, [], 'offWeeks cleared for a one-off event too — meaningless without a weekly recurrence');
+
+  // offWeeks on a recurring class: any date within the week is snapped to
+  // that week's own Monday, dupes collapse, and an invalid entry is
+  // dropped outright.
+  const offWeekClassId = store.addClass({
+    name: 'Lecture', days: [0], startTime: '09:00', durationMins: 60,
+    offWeeks: ['2026-07-22', '2026-07-20', 'not-a-date', '2026-08-03'],
+  });
+  eq(store.state.classes[offWeekClassId].offWeeks, ['2026-07-20', '2026-08-03'],
+    'offWeeks snapped to each week\'s Monday, deduped (both 07-20 and 07-22 land on the same Monday), sorted, invalid entry dropped');
 
   // perDayTimes: a stale entry for a day no longer in `days` is dropped;
   // an entry for a day that is stays and is validated on its own. A
@@ -1566,6 +1614,58 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
   });
   eq(shown.meta.nutritionHidden, false, 'an explicit false sticks for nutrition');
   eq(shown.meta.classesHidden, false, 'an explicit false sticks for classes');
+}
+
+// ---------- exams ----------
+{
+  // isExam only ever sticks to a one-off (`date` set) — a recurring class
+  // can't be flagged an exam, and reminders/notifiedReminders are dropped
+  // right along with it.
+  const recurringExam = normalizeState({
+    trackers: {}, classes: { r: { id: 'r', name: 'R', days: [0], isExam: true, reminders: [1, 7] } },
+  }).classes.r;
+  eq(recurringExam.isExam, false, 'isExam ignored on a recurring (non-dated) class');
+  eq(recurringExam.reminders, [], 'reminders dropped along with isExam on a recurring class');
+
+  const rawExam = {
+    id: 'e', name: 'Finals', date: '2027-06-01', isExam: true,
+    reminders: [7, 1, 1, -3, 7, 4000], // dupes, negative, and an absurd 4000-day offset
+    notifiedReminders: [1, 3, 30], // 3 was never actually a reminder here
+  };
+  const savedExam = normalizeState({ trackers: {}, classes: { e: rawExam } }).classes.e;
+  eq(savedExam.isExam, true, 'isExam kept for a one-off (dated) class');
+  eq(savedExam.reminders, [1, 7], 'reminders deduped, negative/out-of-range dropped, sorted ascending');
+  eq(savedExam.notifiedReminders, [1], 'notifiedReminders filtered down to offsets that are still real reminders');
+
+  // checkExamReminders: due detection + catch-up. Takes an explicit
+  // `today` override (same convention classDayStatus/classStats/etc.
+  // already follow) since "due" is fundamentally relative to today, and a
+  // test can't otherwise pin that down without mocking the real clock.
+  const store = createStore({ storage: memStorage(), seed: () => seedState('2026-07-13') });
+  const examId = store.addClass({
+    name: 'Midterm', date: '2026-07-20', isExam: true, reminders: [7, 3, 1], durationMins: 90,
+  });
+
+  eq(store.checkExamReminders('2026-07-10'), [], 'nothing due yet: today is more than a week out');
+  eq(store.state.classes[examId].notifiedReminders, [], 'nothing marked notified when nothing was due');
+
+  const due1 = store.checkExamReminders('2026-07-13'); // exactly 7 days before
+  eq(due1.map((d) => d.offset), [7], 'the 7-day-before reminder is due exactly a week out');
+  eq(store.state.classes[examId].notifiedReminders, [7], 'that offset is marked notified');
+  eq(store.checkExamReminders('2026-07-13'), [], 'calling again the same day fires nothing new');
+
+  // Skip straight to the day before the exam: both the 3- and 1-day
+  // reminders' moments have now passed at once, but only the nearest is
+  // surfaced as a notification — the other is still marked notified so it
+  // doesn't trickle in later.
+  const due2 = store.checkExamReminders('2026-07-19');
+  eq(due2.map((d) => d.offset), [1], 'closest passed-due reminder (1-day-before) is the one surfaced');
+  eq(store.state.classes[examId].notifiedReminders.slice().sort((a, b) => a - b), [1, 3, 7],
+    'both the 3-day and 1-day reminders are marked notified even though only the nearest fired');
+
+  const examPastId = store.addClass({ name: 'Already happened', date: '2026-07-01', isExam: true, reminders: [1] });
+  eq(store.checkExamReminders('2026-07-13').some((d) => d.exam.id === examPastId), false,
+    'an exam whose date has already passed never fires a reminder');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

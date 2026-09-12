@@ -2,7 +2,7 @@
 // localStorage under one key; every mutation goes through commit() which
 // re-normalizes touched entries, saves, and notifies subscribers.
 
-import { todayKey, isValidKey, addDays, parseKey, weekdayIndex } from './dates.js';
+import { todayKey, isValidKey, addDays, parseKey, weekdayIndex, mondayOf } from './dates.js';
 import { roundAmount, isHit, pomodoroWorkElapsedMs, advancePomodoro, skipPomodoro } from './model.js';
 import { classTimeFor } from './classes.js';
 
@@ -164,6 +164,36 @@ function normalizeClass(raw, i) {
   }
 
   const createdAt = isValidKey(raw.createdAt) ? raw.createdAt : todayKey();
+
+  // Off weeks: specific Monday-of-week keys a recurring class doesn't meet
+  // — a semester break, a public holiday week — on top of its normal
+  // weekly `days`. Meaningless for a one-off (`date` set), same as
+  // startDate/endDate/perDayTimes above. Canonicalised to each entry's own
+  // Monday (not just any date in that week) so classOccursOn's lookup
+  // (also keyed by mondayOf) is a plain membership check.
+  let offWeeks = [];
+  if (!date && Array.isArray(raw.offWeeks)) {
+    offWeeks = [...new Set(raw.offWeeks.filter(isValidKey).map((k) => mondayOf(k)))].sort();
+  }
+
+  // Exams are one-off events (`date` set) flagged for extra visibility:
+  // brighter calendar cells everywhere and reminder notifications ahead of
+  // the date. `reminders` holds day-offsets ("7" = a week before);
+  // `notifiedReminders` tracks which of those have already fired so
+  // reopening the app doesn't re-notify the same one (see
+  // store.checkExamReminders).
+  const isExam = !!date && !!raw.isExam;
+  let reminders = [];
+  if (isExam && Array.isArray(raw.reminders)) {
+    reminders = [...new Set(raw.reminders.map((d) => Math.round(num(d, -1))).filter((d) => d >= 0 && d <= 3650))]
+      .sort((a, b) => a - b);
+  }
+  let notifiedReminders = [];
+  if (isExam && Array.isArray(raw.notifiedReminders)) {
+    notifiedReminders = [...new Set(raw.notifiedReminders.map((d) => Math.round(num(d, -1))))]
+      .filter((d) => reminders.includes(d));
+  }
+
   return {
     id: str(raw.id) || genId('c'),
     name: str(raw.name, 'Class').slice(0, 60) || 'Class',
@@ -175,8 +205,12 @@ function normalizeClass(raw, i) {
     perDayTimes,
     location: str(raw.location, '').slice(0, 60),
     linkedTrackerId: str(raw.linkedTrackerId) || null,
+    offWeeks,
     startDate: !date && isValidKey(raw.startDate) ? raw.startDate : null,
     endDate: !date && isValidKey(raw.endDate) ? raw.endDate : null,
+    isExam,
+    reminders,
+    notifiedReminders,
     archived: !!raw.archived,
     order: num(raw.order, i),
     createdAt,
@@ -987,6 +1021,29 @@ export function createStore({ storage, key = STORAGE_KEY, seed = seedState } = {
       }
       commit();
       return nowDone;
+    },
+    // Which exam reminders are newly due right now — the pure half of the
+    // Pomodoro-notification pattern above (checkPomodoroPhases): app.js
+    // calls this on load/foreground and hands the result to exam-notify.js
+    // to actually fire. Marks every offset that's caught up as notified in
+    // the same pass, even ones this skips past (see below), so a reminder
+    // whose moment passed while the app was closed for a while doesn't
+    // trickle in one stale notification per future app open.
+    checkExamReminders(today = todayKey()) {
+      const due = [];
+      let changed = false;
+      for (const c of Object.values(state.classes)) {
+        if (!c.isExam || !c.date || c.date < today) continue;
+        const passed = c.reminders.filter((d) => !c.notifiedReminders.includes(d) && addDays(c.date, -d) <= today);
+        if (!passed.length) continue;
+        // Only the closest one is worth surfacing as a notification — the
+        // rest already missed their moment and would just be noise.
+        due.push({ exam: c, offset: Math.min(...passed) });
+        c.notifiedReminders = [...c.notifiedReminders, ...passed];
+        changed = true;
+      }
+      if (changed) commit();
+      return due;
     },
     replaceAll(data) {
       state = normalizeState(data);

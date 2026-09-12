@@ -30,11 +30,15 @@ Add-to-Home-Screen app.
   restores it. Home nudges gently when backups go stale.
 - **Classes** (optional): a wide tile, twice a pinned card's width, listing
   today's university classes and whether each has been attended. Classes
-  recur weekly (optionally bounded to a semester's start/end date) and can
-  be **linked** to a time counter — marking one attended logs its scheduled
-  duration onto that tracker automatically (a 2-hour tutorial adds 2 hours
-  to "Study"), and un-marking reverses it. Off by default; add it from
-  **New tracker**. See [Classes](#classes) below.
+  recur weekly (optionally bounded to a semester's start/end date, with
+  specific **off weeks** — a break, a public holiday — skipped entirely)
+  and can be **linked** to a time counter — marking one attended logs its
+  scheduled duration onto that tracker automatically (a 2-hour tutorial
+  adds 2 hours to "Study"), and un-marking reverses it. A one-off class can
+  also be flagged an **exam** — a persistent "upcoming" entry on the tile, a
+  brighter accent everywhere it's shown, and optional reminder
+  notifications ahead of the date, however far out it is. Off by default;
+  add it from **New tracker**. See [Classes](#classes) below.
 - **Nutrition** (optional, read-only): a wide tile below the pinned trackers
   summarises today's energy and macros against an externally-maintained diet
   target file, colour-coded and with a warnings strip when a nutrient's been
@@ -74,6 +78,10 @@ Two new top-level collections alongside `trackers`/`groups`/`days`:
     "location": "optional, free text",
     "linkedTrackerId": "optional, a Time-measured counter's id",
     "startDate": "optional YYYY-MM-DD", "endDate": "optional YYYY-MM-DD",
+    "offWeeks": ["2026-07-20"], // Monday-of-week keys this recurring class skips
+    "isExam": false,          // only meaningful alongside `date` — see Exams below
+    "reminders": [7, 1],      // day-offsets before `date` to notify; exam only
+    "notifiedReminders": [],  // subset of reminders already fired
     "archived": false, "order", "createdAt"
   }
 },
@@ -90,6 +98,22 @@ attendance stays fully visible in its own history page. `classDays` only
 ever holds `true` entries — the same "presence means it happened, absence
 means nothing was logged" shape a tracker's own `days` entries use.
 
+### Off weeks
+
+A recurring class can flag specific weeks it doesn't meet — a semester
+break, a public holiday — on top of its normal weekly `days`. The editor's
+"Off weeks" field (offered whenever "Every week" is picked) takes any date
+inside the week to skip and snaps it to that week's own Monday
+(`mondayOf`, `js/dates.js`) before storing it, since a week is the unit
+being skipped, not a single day; picking any day of that week again is a
+no-op, not a second entry. `classOccursOn` treats a flagged week exactly as
+if the class didn't exist that week at all — it drops out of the tile, the
+calendar (reads as a plain empty day, not a miss), and `classStats`'s
+scheduled/attended/streak counts, everywhere at once, since they all run
+through the same one function. Meaningless for a one-off event or exam
+(`normalizeClass` clears it right alongside `startDate`/`endDate` when
+`date` is set) — there's no "week" for a single date to belong to.
+
 ### Events (one-off classes)
 
 The editor's "repeats" toggle ("Every week" / "Just once") is the only
@@ -101,6 +125,44 @@ empty too, so stored data never carries two conflicting ideas of when the
 thing happens). Everything else — time, duration, location, linking,
 colour, its own history page — works identically, since none of it cares
 whether an occurrence came from a weekday match or a single fixed date.
+
+### Exams
+
+A one-off event can also be flagged `isExam` — everything about scheduling
+still runs through the exact same event machinery above, but an exam gets
+extra visibility on top: a brighter accent-glow treatment everywhere it
+appears (its own row wherever it's listed, its calendar cell on both its
+own history page and the all-classes overview — including a future month
+those calendars wouldn't otherwise let you page into), a persistent
+"upcoming exams" list on the Classes tile itself so it's visible well
+before the day it falls on rather than only the day of, and optional
+reminder notifications ahead of the date.
+
+`reminders` is a set of day-offsets picked from a fixed preset menu (same
+day, or 1/3/7/14/30 days before) rather than a free-typed number — a bad
+free-typed value could silently produce a reminder that never fires.
+`notifiedReminders` tracks which of those have already gone out
+(`store.checkExamReminders`, called from `app.js` on load and on
+`visibilitychange`) so reopening the app doesn't re-notify the same one; if
+more than one reminder's moment passed at once — the app wasn't opened for
+a while — only the closest is actually surfaced as a notification, but all
+of them are marked notified together so the rest don't trickle in one per
+future app open.
+
+`nextOccurrence` (`js/classes.js`) treats any one-off `date` as a direct
+comparison rather than a day-by-day search — needed because an exam
+routinely sits far enough out (next semester, next year) that the old
+366-day search bound used for recurring classes would have missed it
+entirely.
+
+**Same notification constraint as Pomodoro's own, and the same trade-off
+accepted** (see [Notifications](#notifications) below): this is a static,
+backend-free PWA, so there's no way to push a notification to a closed app
+from a server. A reminder fires as soon as the app is next opened or
+foregrounded on or after its due date — reliable for something opened
+somewhat regularly, silent for weeks of not touching the app at all. Real
+delivery at the exact moment while the app is closed would need Web Push
+and a server.
 
 ### Different times on different days
 

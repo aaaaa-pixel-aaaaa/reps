@@ -3,7 +3,7 @@
 // is nutrition.json: it's maintained outside this repo, so it's served
 // network-first with a cache fallback instead (see the fetch handler below)
 // — cache-first would mean updates to it never reach an installed app.
-const VERSION = 'reps-v1.0.26';
+const VERSION = 'reps-v1.0.28';
 const CACHE = `reps-${VERSION}`;
 
 const NUTRITION_URL = 'https://raw.githubusercontent.com/aaaaa-pixel-aaaaa/reps/main/nutrition.json';
@@ -22,6 +22,7 @@ const ASSETS = [
   './js/wheel.js',
   './js/pomodoro.js',
   './js/pomodoro-notify.js',
+  './js/exam-notify.js',
   './js/nutrition.js',
   './js/nutrition-store.js',
   './js/views/home.js',
@@ -87,23 +88,26 @@ self.addEventListener('fetch', (e) => {
   );
 });
 
-// A Pomodoro phase-change notification's own click: focus the app if it's
-// already open (handing the tracker id back via postMessage so it can
-// navigate there — a service worker can't touch location.hash itself),
-// otherwise open a fresh window at that tracker's history.
+// A notification's own click — Pomodoro phase change or exam reminder:
+// focus the app if it's already open (handing the id back via postMessage
+// so it can navigate there — a service worker can't touch location.hash
+// itself), otherwise open a fresh window at that tracker/class's page.
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
-  const trackerId = e.notification.data && e.notification.data.trackerId;
+  const data = e.notification.data || {};
+  const { trackerId, classId } = data;
   e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
       for (const c of clients) {
         if ('focus' in c) {
           if (trackerId) c.postMessage({ type: 'pomodoro-notification-click', trackerId });
+          else if (classId) c.postMessage({ type: 'exam-notification-click', classId });
           return c.focus();
         }
       }
       if (self.clients.openWindow) {
-        return self.clients.openWindow(trackerId ? `./#t/${trackerId}` : './');
+        const hash = trackerId ? `#t/${trackerId}` : classId ? `#classes/${classId}` : '';
+        return self.clients.openWindow(`./${hash}`);
       }
     })
   );

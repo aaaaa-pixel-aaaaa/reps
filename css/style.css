@@ -216,6 +216,20 @@ input, select, textarea { font: inherit; color: inherit; }
    class visibly stands out from a plain one at a glance */
 .class-linked { color: var(--c); font-weight: 700; }
 
+/* Exams stand out everywhere they appear — a brighter ring + glow of the
+   item's own accent layered on top of whatever it's rendered as, rather
+   than a separate fixed "exam colour" competing with the class's own. */
+.class-row.exam { box-shadow: 0 0 0 1.5px var(--c-40), 0 0 20px -6px var(--c-70); border-radius: 14px; }
+.exam-dot {
+  width: 36px; height: 36px; flex: none; border-radius: 50%;
+  display: grid; place-items: center; color: var(--c); background: var(--c-25);
+  box-shadow: 0 0 14px -3px var(--c-70);
+}
+.exam-dot svg { width: 17px; height: 17px; }
+.exam-countdown { font-size: 12.5px; font-weight: 800; color: var(--c); flex: none; white-space: nowrap; }
+.opt.exam .exam-dot { width: 26px; height: 26px; }
+.opt.exam .exam-dot svg { width: 13px; height: 13px; }
+
 /* weekday multi-select in the class editor: seven equal toggle buttons,
    M..S, mirroring .swatch's on-state treatment but for text labels */
 .daypicker { display: flex; gap: 6px; }
@@ -233,6 +247,24 @@ input, select, textarea { font: inherit; color: inherit; }
 .dp-btn:active { transform: scale(0.92); }
 .dp-btn.on { background: var(--c); color: var(--on-c); border-color: var(--c); }
 
+/* exam reminder presets: same pill-toggle idiom as .dp-btn, but variable
+   width and wrapping since the labels are whole phrases, not single
+   letters */
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-btn {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 12px;
+  background: var(--raise2);
+  border: 1px solid var(--line);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--dim);
+  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.15s var(--spring);
+}
+.chip-btn:active { transform: scale(0.94); }
+.chip-btn.on { background: var(--c); color: var(--on-c); border-color: var(--c); }
+
 /* per-day time overrides: one compact line per selected day, kept to a
    single row each so differing times on different days doesn't turn the
    form into a wall of fields */
@@ -240,6 +272,28 @@ input, select, textarea { font: inherit; color: inherit; }
 .perday-row { display: flex; align-items: center; gap: 8px; }
 .perday-day { width: 32px; flex: none; font-size: 13px; font-weight: 700; color: var(--dim); }
 .perday-row .input { height: 44px; }
+
+/* off weeks: a short list of already-skipped weeks plus a compact
+   date-then-add row beneath, kept small since it's an occasional-use
+   sub-field of the schedule, not a primary one */
+.offweek-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.offweek-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--raise2);
+  border-radius: 10px;
+  padding: 8px 6px 8px 12px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--dim);
+}
+.offweek-remove { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: var(--faint); flex: none; }
+.offweek-remove:active { background: var(--raise); color: var(--text); }
+.offweek-remove svg { width: 14px; height: 14px; }
+.offweek-form { display: flex; gap: 8px; }
+.offweek-add { width: auto; height: 44px; padding: 0 16px; flex: none; white-space: nowrap; }
+.offweek-add svg { width: 16px; height: 16px; }
 
 input[type="time"].input { line-height: 48px; }
 
@@ -1000,6 +1054,12 @@ input[type="date"].input { line-height: 48px; }
 .cal-cell.pending { background: var(--raise2); }
 .cal-cell.future, .cal-cell.empty { color: var(--faint); opacity: 0.5; }
 .cal-cell.today { box-shadow: inset 0 0 0 1.5px var(--c); }
+/* An exam day overrides the plain dimmed future/empty look above (later in
+   source order wins at equal specificity) — its own accent, full opacity,
+   and a glow ring brighter than a plain .hit day gets, since this is the
+   one calendar day worth noticing well before it arrives. */
+.cal-cell.exam { background: var(--c); color: var(--on-c); opacity: 1; box-shadow: 0 0 0 2px var(--c), 0 0 16px -3px var(--c-70); }
+.cal-cell.exam.today { box-shadow: 0 0 0 2px var(--c), 0 0 16px -3px var(--c-70), inset 0 0 0 1.5px var(--on-c); }
 /* the all-classes overview colours cells by inline alpha rather than a
    status class (see attendanceColor in js/views/classes.js) — near-full
    attendance is bright enough to need .hit's own light-on-dark text flip */

@@ -9,17 +9,19 @@
 
 import {
   todayKey, monthOf, addMonths, cmpMonth, monthGrid, monthLabel, shortDate,
-  WEEKDAYS, WEEKDAYS_MIN, isValidKey, addDays,
+  WEEKDAYS, WEEKDAYS_MIN, isValidKey, addDays, daysBetween, mondayOf, weekLabel,
 } from '../dates.js';
 import { fmtMinutes } from '../model.js';
 import {
   fmtTime12, addMinutesToTime, classTimeRange, classTimeForDay, classTimeFor,
   classOccursOn, isClassDone, classesForDay, classesOccurringOn, dayAttendance, todayClassSummary,
   classDayStatus, nextOccurrence, classStats, allClassesStats,
+  upcomingExams, examCountdown, EXAM_REMINDER_PRESETS,
 } from '../classes.js';
 import { PALETTE } from '../store.js';
 import { h, icon, accentStyle, rgba, haptic, openSheet, closeAllSheets, confirmSheet, toast } from '../ui.js';
 import { field, switchRow, swatchPicker, segmented, escapeHtml } from './editors.js';
+import { requestExamPermission, examNotificationsSupported } from '../exam-notify.js';
 
 // ---- home tile ----
 
@@ -33,27 +35,53 @@ function classRow(store, c, dateKey, onNavigate) {
   const { startTime, durationMins } = classTimeFor(c, dateKey);
   const subBits = [`${fmtTime12(startTime)}–${fmtTime12(addMinutesToTime(startTime, durationMins))}`];
   if (c.location) subBits.push(c.location);
+  // Only an exam ever reaches this row for a date still ahead — the
+  // overview calendar's future cells are otherwise unclickable — and
+  // there's nothing to mark yet, same as classHero's own treatment of a
+  // class that hasn't happened today.
+  const upcoming = dateKey > todayKey();
 
   return h('div', {
-    class: 'class-row', style: accentStyle(c.color),
+    class: `class-row ${c.isExam ? 'exam' : ''}`, style: accentStyle(c.color),
     role: 'button', tabindex: '0',
-    'aria-label': `${c.name}, ${subBits.join(', ')} — view history`,
+    'aria-label': `${c.name}, ${subBits.join(', ')}${c.isExam ? ', exam' : ''} — view history`,
     onclick: () => { onNavigate && onNavigate(); location.hash = `classes/${c.id}`; },
   },
-    h('button', {
-      class: `mini-check ${done ? 'done' : ''}`,
-      'aria-label': `${c.name}: mark ${done ? 'not done' : 'done'}`,
-      onclick: (e) => {
-        e.stopPropagation();
-        const nowDone = store.toggleClassDone(c.id, dateKey);
-        haptic(nowDone ? [12, 50, 16] : 8);
-        if (nowDone && linked) toast(`+${fmtMinutes(durationMins)} added to ${linked.name}`);
-      },
-    }, icon('check')),
+    upcoming
+      ? h('div', { class: 'mini-check', style: 'color:var(--faint);pointer-events:none' }, icon('clock'))
+      : h('button', {
+          class: `mini-check ${done ? 'done' : ''}`,
+          'aria-label': `${c.name}: mark ${done ? 'not done' : 'done'}`,
+          onclick: (e) => {
+            e.stopPropagation();
+            const nowDone = store.toggleClassDone(c.id, dateKey);
+            haptic(nowDone ? [12, 50, 16] : 8);
+            if (nowDone && linked) toast(`+${fmtMinutes(durationMins)} added to ${linked.name}`);
+          },
+        }, icon('check')),
     h('div', { class: 'trow-main' },
       h('div', { class: 'trow-name' }, c.name),
       h('div', { class: 'trow-sub' }, subBits.join(' · '),
         linked ? h('span', { class: 'class-linked' }, ` · +${fmtMinutes(durationMins)} → ${linked.name}`) : null)),
+  );
+}
+
+// An upcoming exam's own row — brighter than a plain class row (its own
+// accent, boosted by the same .exam glow classRow above uses on exam day)
+// and, since there's nothing to check off days ahead of time, a countdown
+// in place of the mini-check.
+function examUpcomingRow(c, today) {
+  return h('div', {
+    class: 'class-row exam', style: accentStyle(c.color),
+    role: 'button', tabindex: '0',
+    'aria-label': `${c.name}, exam ${examCountdown(daysBetween(today, c.date))} — view details`,
+    onclick: () => { location.hash = `classes/${c.id}`; },
+  },
+    h('div', { class: 'exam-dot', 'aria-hidden': 'true' }, icon('bell')),
+    h('div', { class: 'trow-main' },
+      h('div', { class: 'trow-name' }, c.name),
+      h('div', { class: 'trow-sub' }, `${shortDate(c.date, today)} · ${classTimeRange(c)}`)),
+    h('div', { class: 'exam-countdown' }, examCountdown(daysBetween(today, c.date))),
   );
 }
 
@@ -63,17 +91,26 @@ export function renderClassesTile(store) {
   const list = classesForDay(classes, today);
   const anyClasses = Object.keys(classes).length > 0;
   const { total, done } = todayClassSummary(classes, classDays, today);
+  // Strictly future — today's own exam already shows (glowing) in the
+  // today list above, via the same classesForDay/classRow every other
+  // class goes through, so it isn't repeated here.
+  const laterExams = upcomingExams(classes, today).filter((c) => c.date > today).slice(0, 3);
 
+  const nextExam = laterExams[0];
   const sub = !anyClasses ? 'Add your timetable to get started'
-    : total === 0 ? 'Nothing scheduled today'
-    : `${done} of ${total} done today`;
+    : total > 0 ? `${done} of ${total} done today`
+    : nextExam ? `${nextExam.name} ${examCountdown(daysBetween(today, nextExam.date))}`
+    : 'Nothing scheduled today';
+
+  const todayList = total === 0 ? null : h('div', { class: 'class-list' }, list.map((c) => classRow(store, c, today)));
+  const examList = laterExams.length
+    ? h('div', { class: 'class-list', style: todayList ? 'margin-top:2px' : '' }, laterExams.map((c) => examUpcomingRow(c, today)))
+    : null;
 
   const body = !anyClasses
     ? h('button', { class: 'add-btn', style: 'margin-top:2px', onclick: () => openClassEditor(store) },
         icon('plus'), 'Add a class')
-    : total === 0
-      ? null
-      : h('div', { class: 'class-list' }, list.map((c) => classRow(store, c, today)));
+    : (todayList || examList) ? h('div', {}, [todayList, examList].filter(Boolean)) : null;
 
   return h('div', { class: 'card classes-card' },
     h('button', {
@@ -94,7 +131,7 @@ export function renderClassesTile(store) {
 // ---- manage sheet (list + add + hide) ----
 
 function classDaysLabel(c) {
-  if (c.date) return `Once · ${shortDate(c.date)}`;
+  if (c.date) return `${c.isExam ? 'Exam' : 'Once'} · ${shortDate(c.date)}`;
   return c.days.length === 7 ? 'Every day' : c.days.map((d) => WEEKDAYS_MIN[d]).join('');
 }
 
@@ -108,15 +145,21 @@ function dayRangeLabel(c, dayIndex) {
 // own history hero). A `perDayTimes` class spells out each day's own
 // range rather than a single shared one, since a shared range would be
 // wrong for at least one of its days.
+function offWeeksNote(c) {
+  const n = c.offWeeks ? c.offWeeks.length : 0;
+  return n ? ` · ${n} week${n === 1 ? '' : 's'} off` : '';
+}
+
 function classScheduleSummary(c) {
-  if (c.date) return `Once · ${shortDate(c.date)} · ${classTimeRange(c)}`;
-  if (!c.perDayTimes) return `${classDaysLabel(c)} · ${classTimeRange(c)}`;
-  return c.days.map((d) => `${WEEKDAYS_MIN[d]} ${dayRangeLabel(c, d)}`).join(', ');
+  if (c.date) return `${c.isExam ? 'Exam' : 'Once'} · ${shortDate(c.date)} · ${classTimeRange(c)}`;
+  if (!c.perDayTimes) return `${classDaysLabel(c)} · ${classTimeRange(c)}${offWeeksNote(c)}`;
+  return c.days.map((d) => `${WEEKDAYS_MIN[d]} ${dayRangeLabel(c, d)}`).join(', ') + offWeeksNote(c);
 }
 
 function classOptRow(store, c, onChange) {
-  return h('button', { class: 'opt', onclick: () => openClassOptions(store, c.id, onChange) },
-    h('span', { class: 'group-dot', style: `background:${c.color}` }),
+  return h('button', { class: `opt ${c.isExam ? 'exam' : ''}`, onclick: () => openClassOptions(store, c.id, onChange) },
+    c.isExam ? h('span', { class: 'exam-dot', style: accentStyle(c.color) }, icon('bell'))
+      : h('span', { class: 'group-dot', style: `background:${c.color}` }),
     h('span', { class: 'grow' },
       h('div', {}, c.name),
       h('div', { class: 'opt-note', style: 'margin-top:2px' }, classScheduleSummary(c))));
@@ -232,7 +275,8 @@ export function openClassEditor(store, classId = null, onSaved = null) {
     : {
         name: '', color: PALETTE[Object.keys(store.state.classes).length % PALETTE.length],
         days: [], date: null, startTime: '09:00', durationMins: 60, perDayTimes: null, location: '',
-        linkedTrackerId: null, startDate: null, endDate: null,
+        linkedTrackerId: null, startDate: null, endDate: null, offWeeks: [],
+        isExam: false, reminders: [], notifiedReminders: [],
       };
 
   const timeCounters = Object.values(store.state.trackers).filter((t) => t.type === 'counter' && t.time);
@@ -304,6 +348,44 @@ export function openClassEditor(store, classId = null, onSaved = null) {
         ].filter(Boolean));
       }
 
+      // Off weeks: specific weeks this recurring class doesn't meet — a
+      // semester break, a public holiday — on top of its normal weekly
+      // days. Picking any date snaps to that date's own Monday
+      // (mondayOf), since a week is the unit skipped, not a single day;
+      // classOccursOn then treats the whole week as if the class simply
+      // didn't exist that week, everywhere (calendar, stats, streaks).
+      const offWeeksBox = h('div', {});
+      function renderOffWeeks() {
+        const weeks = f.offWeeks || [];
+        const rows = weeks.map((wk) => h('div', { class: 'offweek-row' },
+          h('span', {}, weekLabel(wk)),
+          h('button', {
+            class: 'offweek-remove', type: 'button', 'aria-label': `Remove ${weekLabel(wk)} as an off week`,
+            onclick: () => {
+              f.offWeeks = f.offWeeks.filter((w) => w !== wk);
+              haptic(6);
+              renderOffWeeks();
+            },
+          }, icon('x'))));
+
+        const addDate = h('input', { class: 'input num', type: 'date', style: 'flex:1' });
+        addDate.value = todayKey();
+        const addBtn = h('button', {
+          class: 'btn btn-ghost offweek-add', type: 'button',
+          onclick: () => {
+            if (!isValidKey(addDate.value)) return;
+            const wk = mondayOf(addDate.value);
+            if (!f.offWeeks.includes(wk)) { f.offWeeks = [...f.offWeeks, wk].sort(); haptic(8); }
+            renderOffWeeks();
+          },
+        }, icon('plus'), 'Add');
+
+        offWeeksBox.replaceChildren(field('off weeks', h('div', {},
+          rows.length ? h('div', { class: 'offweek-list' }, rows) : null,
+          h('div', { class: 'offweek-form' }, addDate, addBtn),
+        ), 'pick any date in a week to skip it entirely'));
+      }
+
       // One compact row per selected day — a day label, a time, a duration
       // — shown only once "different time each day" is switched on, and
       // only offered at all once there's more than one day to differ.
@@ -333,8 +415,8 @@ export function openClassEditor(store, classId = null, onSaved = null) {
           { value: 'weekly', label: 'Every week' },
           { value: 'once', label: 'Just once' },
         ], once ? 'once' : 'weekly', (v) => {
-          if (v === 'once') { f.date = f.date || todayKey(); f.days = []; f.perDayTimes = null; f.startDate = null; f.endDate = null; }
-          else { f.date = null; }
+          if (v === 'once') { f.date = f.date || todayKey(); f.days = []; f.perDayTimes = null; f.startDate = null; f.endDate = null; f.offWeeks = []; }
+          else { f.date = null; f.isExam = false; f.reminders = []; f.notifiedReminders = []; }
           renderSchedule();
         }));
 
@@ -342,7 +424,44 @@ export function openClassEditor(store, classId = null, onSaved = null) {
           const dateInput = h('input', { class: 'input num', type: 'date' });
           dateInput.value = f.date;
           dateInput.addEventListener('input', () => { if (isValidKey(dateInput.value)) f.date = dateInput.value; });
-          scheduleBox.replaceChildren(repeatsToggle, field('date', dateInput), sharedTimeFields);
+
+          // Reminders reuse a preset menu of day-offsets rather than a free
+          // number, and only mean anything once "This is an exam" is on —
+          // this box rebuilds itself independent of the schedule box above
+          // so toggling a reminder chip doesn't need to re-render the whole
+          // date/time section around it.
+          const examBox = h('div', {});
+          function renderExamBox() {
+            const on = !!f.isExam;
+            const chips = on ? h('div', { class: 'chip-row' },
+              EXAM_REMINDER_PRESETS.map(({ days, label }) => h('button', {
+                class: `chip-btn ${f.reminders.includes(days) ? 'on' : ''}`,
+                type: 'button',
+                onclick: () => {
+                  f.reminders = f.reminders.includes(days)
+                    ? f.reminders.filter((d) => d !== days)
+                    : [...f.reminders, days];
+                  haptic(6);
+                  renderExamBox();
+                },
+              }, label))) : null;
+            examBox.replaceChildren(
+              switchRow('This is an exam', 'brighter on the calendar, with reminder notifications', on, (checked) => {
+                f.isExam = checked;
+                // Same rule Pomodoro's own permission request follows: must
+                // run inside this click handler, never on load, since iOS
+                // only honours the prompt as a direct result of a gesture.
+                if (checked) { f.reminders = f.reminders.length ? f.reminders : [1, 7]; requestExamPermission(); }
+                renderExamBox();
+              }),
+              on ? field('remind me', chips,
+                examNotificationsSupported() ? null
+                  : 'Notifications aren’t supported here — reminders will still show brighter on the calendar.') : null,
+            );
+          }
+          renderExamBox();
+
+          scheduleBox.replaceChildren(repeatsToggle, field('date', dateInput), sharedTimeFields, examBox);
           return;
         }
 
@@ -385,8 +504,10 @@ export function openClassEditor(store, classId = null, onSaved = null) {
           perDayToggle,
           perDayOn ? h('div', { class: 'perday-list' }, f.days.map((d) => perDayRow(d))) : sharedTimeFields,
           rangeBox,
+          offWeeksBox,
         ].filter(Boolean));
         renderRange();
+        renderOffWeeks();
       }
       renderSchedule();
 
@@ -484,20 +605,32 @@ function classStatsGrid(stats) {
     cell(String(stats.longestStreak), 'longest streak'));
 }
 
-function classCalendarLegend() {
+function classCalendarLegend(c) {
   const item = (style, label) => h('span', {}, h('i', { style }), label);
   return h('div', { class: 'cal-legend' },
     item('background:var(--c)', 'attended'),
     item('background:rgba(228,87,61,0.28)', 'missed'),
-    item('background:transparent;border:1px solid var(--line)', 'no class'));
+    item('background:transparent;border:1px solid var(--line)', 'no class'),
+    c.isExam ? item('background:var(--c);box-shadow:0 0 6px 1px var(--c-70)', 'exam') : null);
+}
+
+// A class's own calendar clamps forward navigation to the current month —
+// there's nothing to show ahead of today for attendance. An exam is the
+// one exception: its date can sit years out, so this calendar needs to be
+// pageable at least that far to actually show it.
+function classCalendarMaxMonth(c, nowMonth) {
+  if (!c.isExam || !c.date) return nowMonth;
+  const examMonth = monthOf(c.date);
+  return cmpMonth(examMonth, nowMonth) > 0 ? examMonth : nowMonth;
 }
 
 function classCalendar(store, c, cur, today) {
   const nowMonth = monthOf(today);
+  const maxMonth = classCalendarMaxMonth(c, nowMonth);
 
   const nav = (delta) => {
     const next = addMonths(cur, delta);
-    if (cmpMonth(next, nowMonth) > 0) return;
+    if (cmpMonth(next, maxMonth) > 0) return;
     monthMemo.set(c.id, next);
     haptic(6);
     rebuild(next);
@@ -514,22 +647,24 @@ function classCalendar(store, c, cur, today) {
           h('button', { class: 'icon-btn', 'aria-label': 'previous month', onclick: () => nav(-1) }, icon('chevL')),
           h('button', {
             class: 'icon-btn', 'aria-label': 'next month',
-            disabled: cmpMonth(m, nowMonth) >= 0, onclick: () => nav(1),
+            disabled: cmpMonth(m, maxMonth) >= 0, onclick: () => nav(1),
           }, icon('chevR')))),
       h('div', { class: 'cal-grid' },
         WEEKDAYS_MIN.map((d) => h('div', { class: 'cal-dow' }, d)),
         monthGrid(m.y, m.m).flat().map((key) => {
           if (!key) return h('div', {});
           const status = classDayStatus(c, store.state.classDays, key, today);
+          const isExamDay = c.isExam && key === c.date;
           const clickable = status === 'hit' || status === 'miss' || status === 'pending';
           return h('button', {
-            class: `cal-cell num ${status} ${key === today ? 'today' : ''}`,
+            class: `cal-cell num ${status} ${key === today ? 'today' : ''} ${isExamDay ? 'exam' : ''}`,
+            style: isExamDay ? accentStyle(c.color) : '',
             disabled: !clickable,
-            'aria-label': `${key}: ${status}`,
+            'aria-label': `${key}: ${status}${isExamDay ? ', exam' : ''}`,
             onclick: () => { store.toggleClassDone(c.id, key); haptic(8); },
           }, String(Number(key.slice(8))));
         })),
-      classCalendarLegend(),
+      classCalendarLegend(c),
     );
   }
   rebuild(cur);
@@ -543,8 +678,12 @@ export function renderClassesHistory(root, store, classId) {
 
   const stats = classStats(c, store.state.classDays, today);
   const nowMonth = monthOf(today);
-  let cur = monthMemo.get(classId) || nowMonth;
-  if (cmpMonth(cur, nowMonth) > 0) cur = nowMonth;
+  const maxMonth = classCalendarMaxMonth(c, nowMonth);
+  // First visit to a future exam opens straight on its own month rather
+  // than the current one — there'd be nothing else to see in between.
+  const defaultMonth = c.isExam && c.date > today ? monthOf(c.date) : nowMonth;
+  let cur = monthMemo.get(classId) || defaultMonth;
+  if (cmpMonth(cur, maxMonth) > 0) cur = maxMonth;
 
   root.append(h('div', { style: accentStyle(c.color) },
     classHistoryHeader(store, c),
@@ -592,12 +731,24 @@ function overviewStatsGrid(stats) {
     cell(String(stats.longestStreak), 'best streak', stats.longestStreak === 1 ? 'perfect day' : 'perfect days'));
 }
 
-function overviewCalendarLegend() {
+function overviewCalendarLegend(hasExams) {
   const item = (style, label) => h('span', {}, h('i', { style }), label);
   return h('div', { class: 'cal-legend' },
     item(`background:${attendanceColor(1)}`, 'fully attended'),
     item(`background:${attendanceColor(0)}`, 'missed (darker = fewer attended)'),
-    item('background:transparent;border:1px solid var(--line)', 'no class'));
+    item('background:transparent;border:1px solid var(--line)', 'no class'),
+    hasExams ? item(`background:${OVERVIEW_ACCENT};box-shadow:0 0 6px 1px ${rgba(OVERVIEW_ACCENT, 0.7)}`, 'exam') : null);
+}
+
+// The overview calendar also clamps forward navigation to the current
+// month by default — nothing to show ahead of today for attendance — but
+// needs to reach at least as far as the farthest upcoming exam so that one
+// isn't stuck unreachable off the end of the calendar.
+function overviewMaxMonth(classes, today, nowMonth) {
+  const exams = upcomingExams(classes, today);
+  if (!exams.length) return nowMonth;
+  const farthest = monthOf(exams[exams.length - 1].date);
+  return cmpMonth(farthest, nowMonth) > 0 ? farthest : nowMonth;
 }
 
 // Tapping a day opens every class scheduled on it with its own check —
@@ -627,10 +778,12 @@ let overviewMonth = null; // remembered month across re-renders, like nutrition'
 
 function overviewCalendar(store, cur, today) {
   const nowMonth = monthOf(today);
+  const hasExams = upcomingExams(store.state.classes, today).length > 0;
+  const maxMonth = overviewMaxMonth(store.state.classes, today, nowMonth);
 
   const nav = (delta) => {
     const next = addMonths(cur, delta);
-    if (cmpMonth(next, nowMonth) > 0) return;
+    if (cmpMonth(next, maxMonth) > 0) return;
     overviewMonth = next;
     haptic(6);
     rebuild(next);
@@ -647,7 +800,7 @@ function overviewCalendar(store, cur, today) {
           h('button', { class: 'icon-btn', 'aria-label': 'previous month', onclick: () => nav(-1) }, icon('chevL')),
           h('button', {
             class: 'icon-btn', 'aria-label': 'next month',
-            disabled: cmpMonth(m, nowMonth) >= 0, onclick: () => nav(1),
+            disabled: cmpMonth(m, maxMonth) >= 0, onclick: () => nav(1),
           }, icon('chevR')))),
       h('div', { class: 'cal-grid' },
         WEEKDAYS_MIN.map((d) => h('div', { class: 'cal-dow' }, d)),
@@ -655,6 +808,18 @@ function overviewCalendar(store, cur, today) {
           if (!key) return h('div', {});
           const isToday = key === today;
           if (key > today) {
+            // A future day is otherwise a dead grey square — attendance
+            // hasn't happened yet — except an exam, which is exactly the
+            // thing worth seeing coming from a distance.
+            const examsOnDay = classesOccurringOn(store.state.classes, key).filter((e) => e.isExam);
+            if (examsOnDay.length) {
+              return h('button', {
+                class: 'cal-cell num future exam',
+                style: accentStyle(examsOnDay[0].color),
+                'aria-label': `${key}: exam — ${examsOnDay.map((e) => e.name).join(', ')}`,
+                onclick: () => openDayClassesSheet(store, key),
+              }, String(Number(key.slice(8))));
+            }
             return h('button', { class: 'cal-cell num future', disabled: true }, String(Number(key.slice(8))));
           }
           const { scheduled, attended, ratio } = dayAttendance(store.state.classes, store.state.classDays, key);
@@ -677,7 +842,7 @@ function overviewCalendar(store, cur, today) {
             onclick: () => openDayClassesSheet(store, key),
           }, String(Number(key.slice(8))));
         })),
-      overviewCalendarLegend(),
+      overviewCalendarLegend(hasExams),
     );
   }
   rebuild(cur);
@@ -688,8 +853,9 @@ export function renderClassesOverview(root, store) {
   const today = todayKey();
   const stats = allClassesStats(store.state.classes, store.state.classDays, today);
   const nowMonth = monthOf(today);
+  const maxMonth = overviewMaxMonth(store.state.classes, today, nowMonth);
   let cur = overviewMonth || nowMonth;
-  if (cmpMonth(cur, nowMonth) > 0) cur = nowMonth;
+  if (cmpMonth(cur, maxMonth) > 0) cur = maxMonth;
 
   if (!Object.keys(store.state.classes).length) {
     root.append(h('div', { style: accentStyle(OVERVIEW_ACCENT) },

@@ -9,6 +9,7 @@ import { refreshNutrition, subscribeNutrition, nutritionData } from './nutrition
 import { renderNutritionHistory } from './views/nutrition.js';
 import { renderClassesHistory, renderClassesOverview } from './views/classes.js';
 import { checkAndNotifyPomodoro } from './pomodoro.js';
+import { checkAndNotifyExams } from './exam-notify.js';
 
 const params = new URLSearchParams(location.search);
 const demo = params.get('demo') === '1';
@@ -94,6 +95,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) return;
   refreshNutrition();
   checkAndNotifyPomodoro(store);
+  checkAndNotifyExams(store);
   if (new Date().getDate() !== lastRenderDay) {
     lastRenderDay = new Date().getDate();
     render();
@@ -101,16 +103,20 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // A notification's own click is handled by the service worker (it owns
-// focusing/opening the window), which then hands the tracker id back here
-// via postMessage so the already-open app can navigate to it.
+// focusing/opening the window), which then hands the tracker/class id back
+// here via postMessage so the already-open app can navigate to it.
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', (e) => {
-    if (e.data && e.data.type === 'pomodoro-notification-click' && e.data.trackerId) {
+    if (!e.data) return;
+    if (e.data.type === 'pomodoro-notification-click' && e.data.trackerId) {
       navigate(`t/${e.data.trackerId}`);
+    } else if (e.data.type === 'exam-notification-click' && e.data.classId) {
+      navigate(`classes/${e.data.classId}`);
     }
   });
 }
 
 refreshNutrition();
 checkAndNotifyPomodoro(store);
+checkAndNotifyExams(store);
 render();
