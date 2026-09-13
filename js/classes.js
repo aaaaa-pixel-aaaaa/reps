@@ -216,6 +216,96 @@ export function examCountdown(daysAway) {
   return `in ${daysAway} days`;
 }
 
+// ---- time-grid layout ----
+// Pure positioning math for the Day/Week Apple-Calendar-style views (the
+// all-classes overview, js/views/classes.js): given a day's or week's
+// scheduled occurrences, where each one sits on a shared vertical hour
+// axis and how wide/offset it should be if it overlaps another. No DOM —
+// the view turns these numbers into styled elements.
+
+export function timeToMinutes(hhmm) {
+  const [h, m] = String(hhmm).split(':').map(Number);
+  return h * 60 + m;
+}
+
+// "9 AM", "12 PM" — a whole-hour label for the grid's left-hand gutter.
+export function hourLabel12(mins) {
+  const h = Math.floor(mins / 60) % 24;
+  const ap = h < 12 ? 'AM' : 'PM';
+  return `${h % 12 || 12} ${ap}`;
+}
+
+// The visible [startMin, endMin) window for a day's or week's grid: tight
+// around whatever's actually scheduled (an hour of padding either side,
+// rounded to whole hours) rather than a fixed one-size-fits-all window, so
+// an early lecture or a late lab is never scrolled out of view by default.
+// Falls back to a plain 8am–6pm window with nothing scheduled at all, and
+// never shrinks below 4 hours total so a single short class doesn't render
+// as a comically tall block filling the whole page.
+export function timeGridRange(occurrences) {
+  if (!occurrences.length) return { startMin: 8 * 60, endMin: 18 * 60 };
+  let minStart = Infinity;
+  let maxEnd = -Infinity;
+  for (const o of occurrences) {
+    const s = timeToMinutes(o.startTime);
+    const e = s + o.durationMins;
+    if (s < minStart) minStart = s;
+    if (e > maxEnd) maxEnd = e;
+  }
+  let startMin = Math.max(0, Math.floor((minStart - 60) / 60) * 60);
+  let endMin = Math.min(24 * 60, Math.ceil((maxEnd + 60) / 60) * 60);
+  if (endMin - startMin < 4 * 60) {
+    const mid = (startMin + endMin) / 2;
+    startMin = Math.max(0, Math.floor((mid - 120) / 60) * 60);
+    endMin = Math.min(24 * 60, startMin + 4 * 60);
+  }
+  return { startMin, endMin };
+}
+
+// Side-by-side columns for a single day's occurrences, the same greedy
+// layout real calendar apps use for overlapping events: sorted by start
+// time, each item takes the first column whose previous occupant has
+// already ended, else opens a new one; every item in the same connected
+// overlap cluster ends up sharing that cluster's column count so they're
+// all the same width. A day with no overlaps at all just gets `cols: 1`
+// for every item — full width, the common case for one person's own
+// timetable.
+export function layoutTimeBlocks(occurrences) {
+  const sorted = occurrences
+    .map((o) => ({ ...o, _start: timeToMinutes(o.startTime) }))
+    .sort((a, b) => a._start - b._start);
+
+  const out = [];
+  let cluster = [];
+  let clusterEnd = -Infinity;
+
+  const flushCluster = () => {
+    if (!cluster.length) return;
+    const colEnds = []; // end-minute of the last item placed in each column
+    const withCols = cluster.map((item) => {
+      let col = colEnds.findIndex((end) => end <= item._start);
+      if (col === -1) { col = colEnds.length; colEnds.push(0); }
+      colEnds[col] = item._start + item.durationMins;
+      return { item, col };
+    });
+    const cols = colEnds.length;
+    for (const { item, col } of withCols) {
+      const { _start, ...rest } = item;
+      out.push({ ...rest, col, cols });
+    }
+    cluster = [];
+    clusterEnd = -Infinity;
+  };
+
+  for (const item of sorted) {
+    if (cluster.length && item._start >= clusterEnd) flushCluster();
+    cluster.push(item);
+    clusterEnd = Math.max(clusterEnd, item._start + item.durationMins);
+  }
+  flushCluster();
+  return out;
+}
+
 // All-time attendance across every class at once, for the "all classes"
 // overview: total attended/scheduled, plus a streak of "perfect" days — a
 // day with at least one class where every one of them was attended.

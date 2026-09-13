@@ -16,7 +16,7 @@ import {
   fmtTime12, addMinutesToTime, classEndTime, classTimeRange, classTimeForDay, classTimeFor,
   classOccursOn, isClassDone, classesForDay, classesOccurringOn, dayAttendance, todayClassSummary,
   classDayStatus, nextOccurrence, classStats, allClassesStats,
-  upcomingExams, examCountdown,
+  upcomingExams, examCountdown, timeToMinutes, hourLabel12, timeGridRange, layoutTimeBlocks,
 } from '../js/classes.js';
 import { pinnedTrackers, groupTrackers, reorderContext } from '../js/model.js';
 import { wrapDelta, stepsFor, angleAt } from '../js/wheel.js';
@@ -1519,6 +1519,58 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
 
   eq(allClassesStats({}, {}, '2026-07-13'), { scheduled: 0, attended: 0, currentStreak: 0, longestStreak: 0 },
     'no classes at all: zeroed out, not an error');
+}
+
+// ---------- classes: time-grid layout (Day/Week overview) ----------
+{
+  eq(timeToMinutes('09:30'), 570, 'timeToMinutes parses hours and minutes');
+  eq(hourLabel12(0), '12 AM', 'midnight reads as 12 AM');
+  eq(hourLabel12(9 * 60), '9 AM', 'a plain morning hour');
+  eq(hourLabel12(12 * 60), '12 PM', 'noon reads as 12 PM, not 0 PM');
+  eq(hourLabel12(22 * 60), '10 PM', 'a plain evening hour');
+
+  eq(timeGridRange([]), { startMin: 8 * 60, endMin: 18 * 60 }, 'nothing scheduled: falls back to a plain 8am-6pm window');
+
+  // A single short class gets padded out to the 4-hour floor rather than
+  // rendering as a comically tall block filling the page.
+  eq(timeGridRange([{ startTime: '09:00', durationMins: 60 }]), { startMin: 7 * 60, endMin: 11 * 60 },
+    'a single hour-long class still gets at least a 4-hour window, centred with padding');
+
+  // A wide spread (early morning to mid-afternoon) is padded an hour each
+  // side and rounded to whole hours, no artificial floor needed.
+  eq(
+    timeGridRange([{ startTime: '08:00', durationMins: 60 }, { startTime: '15:00', durationMins: 90 }]),
+    { startMin: 7 * 60, endMin: 18 * 60 },
+    'wide spread: one hour of padding either side, rounded to whole hours',
+  );
+
+  // layoutTimeBlocks: no overlaps at all -> everyone gets the full column.
+  const noOverlap = layoutTimeBlocks([
+    { id: 'a', startTime: '09:00', durationMins: 60 },
+    { id: 'b', startTime: '11:00', durationMins: 60 },
+  ]);
+  eq(noOverlap.map((o) => [o.id, o.col, o.cols]), [['a', 0, 1], ['b', 0, 1]],
+    'non-overlapping classes each take the full-width column');
+
+  // Two classes overlapping in time split into two side-by-side columns.
+  const twoOverlap = layoutTimeBlocks([
+    { id: 'a', startTime: '09:00', durationMins: 60 },
+    { id: 'b', startTime: '09:30', durationMins: 60 },
+  ]);
+  eq(twoOverlap.map((o) => [o.id, o.col, o.cols]), [['a', 0, 2], ['b', 1, 2]],
+    'two overlapping classes split into two equal columns');
+
+  // A chain of three where the first and last don't directly overlap each
+  // other (only both overlap the middle one) still shares one column
+  // between the two non-overlapping ends, using two columns total, not
+  // three — the standard greedy calendar layout.
+  const chain = layoutTimeBlocks([
+    { id: 'a', startTime: '09:00', durationMins: 60 }, // 09:00-10:00
+    { id: 'b', startTime: '09:30', durationMins: 60 }, // 09:30-10:30, overlaps both
+    { id: 'c', startTime: '10:15', durationMins: 45 }, // 10:15-11:00
+  ]);
+  eq(chain.map((o) => [o.id, o.col, o.cols]), [['a', 0, 2], ['b', 1, 2], ['c', 0, 2]],
+    'a chained overlap reuses a\'s column for c once a has ended, rather than opening a third column');
 }
 
 // ---------- classes: store integration ----------

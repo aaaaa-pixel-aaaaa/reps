@@ -206,20 +206,41 @@ tracker's streak skips days it isn't obligated on.
 ### All-classes overview
 
 The tile's calendar-icon button opens `#/classes` — one page across every
-class at once, for "how much did I attend overall" rather than one class
-at a time. It has no single class's colour to scope to, so it uses a fixed
-accent (`OVERVIEW_ACCENT`, the palette's first colour); a stats grid totals
-attended/scheduled/attendance-rate plus a streak of **perfect days** (every
-class scheduled that day was attended — `allClassesStats`), and a month
-calendar blends every class scheduled on a day into one cell
-(`dayAttendance`). A day's fill is coloured by **alpha alone**, not hue: a
-day where something was missed doesn't turn red, it just recedes — a
-literal darker shade of the same accent — while a fully-attended day comes
-in strong, so completeness reads as brightness the way it does on the
-per-class calendars' `hit`/`partial` cells, just continuous instead of
-three-valued. Since one cell can't show several classes' individual states,
-tapping any day with classes on it opens a sheet listing each with its own
-check, live-updating as you toggle them.
+class at once, doubling as both "how much have I done" (the stats grid:
+attended/scheduled/attendance-rate plus a streak of **perfect days**, every
+class scheduled that day attended — `allClassesStats`) and "what do I have
+next to do" (the calendar below it, which — unlike a per-class history
+page — pages freely into the future as well as the past). It has no single
+class's colour to scope to, so it uses a fixed accent (`OVERVIEW_ACCENT`,
+the palette's first colour). A Day/Week/Month toggle (`overviewMode`,
+mirroring history.js's own view toggle one level up) switches the
+calendar's shape entirely:
+
+- **Month** blends every class scheduled on a day into one cell
+  (`dayAttendance`), coloured by **alpha alone**, not hue — a day where
+  something was missed doesn't turn red, it just recedes (a literal darker
+  shade of the accent), while a fully-attended day comes in strong. A
+  scheduled *future* day now gets its own hollow-ring "not done yet" cell
+  (`.cal-cell.upcoming`) instead of vanishing into the same flat grey as a
+  day with nothing on it — the one addition to what was otherwise the
+  original month view.
+- **Week** and **Day** are a shared Apple Calendar-style time grid
+  (`timeGrid`, `js/views/classes.js`) — a vertical hour axis (`js/classes.js`'s
+  `timeGridRange` sizes it to fit whatever's actually scheduled that
+  day/week, padded an hour either side, rather than a fixed one-size-fits
+  window) with each class as its own positioned, coloured block: solid for
+  attended, dimmed red for missed, a hollow ring for not-yet-happened, an
+  exam's usual brighter glow layered on top of any of those. Two classes
+  overlapping in time split into side-by-side columns
+  (`layoutTimeBlocks` — the same greedy column-assignment real calendar
+  apps use), and today's column gets a red "now" line. Week view shares one
+  axis across all seven day columns so everything lines up, the same way a
+  real week view does.
+
+Since one cell (or block) can't show several classes' individual state at
+once regardless of view, tapping any day — including a future one, since
+there's nothing to mark yet there — opens a sheet listing each class
+scheduled that day with its own check, live-updating as you toggle them.
 
 ## Nutrition
 

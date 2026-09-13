@@ -8,8 +8,8 @@
 // is the only place that distinction is resolved.
 
 import {
-  todayKey, monthOf, addMonths, cmpMonth, monthGrid, monthLabel, shortDate,
-  WEEKDAYS, WEEKDAYS_MIN, isValidKey, addDays, daysBetween, mondayOf, weekLabel,
+  todayKey, monthOf, addMonths, cmpMonth, monthGrid, monthLabel, shortDate, longDate,
+  WEEKDAYS, WEEKDAYS_MIN, isValidKey, addDays, addWeeks, daysBetween, mondayOf, weekLabel, weekdayIndex,
 } from '../dates.js';
 import { fmtMinutes } from '../model.js';
 import {
@@ -17,6 +17,7 @@ import {
   classOccursOn, isClassDone, classesForDay, classesOccurringOn, dayAttendance, todayClassSummary,
   classDayStatus, nextOccurrence, classStats, allClassesStats,
   upcomingExams, examCountdown, EXAM_REMINDER_PRESETS,
+  timeToMinutes, hourLabel12, timeGridRange, layoutTimeBlocks,
 } from '../classes.js';
 import { PALETTE } from '../store.js';
 import { h, icon, accentStyle, rgba, haptic, openSheet, closeAllSheets, confirmSheet, toast } from '../ui.js';
@@ -736,24 +737,19 @@ function overviewCalendarLegend(hasExams) {
   return h('div', { class: 'cal-legend' },
     item(`background:${attendanceColor(1)}`, 'fully attended'),
     item(`background:${attendanceColor(0)}`, 'missed (darker = fewer attended)'),
+    item('background:var(--c-25);box-shadow:inset 0 0 0 1.5px var(--c)', 'not done yet'),
     item('background:transparent;border:1px solid var(--line)', 'no class'),
     hasExams ? item(`background:${OVERVIEW_ACCENT};box-shadow:0 0 6px 1px ${rgba(OVERVIEW_ACCENT, 0.7)}`, 'exam') : null);
 }
 
-// The overview calendar also clamps forward navigation to the current
-// month by default — nothing to show ahead of today for attendance — but
-// needs to reach at least as far as the farthest upcoming exam so that one
-// isn't stuck unreachable off the end of the calendar.
-function overviewMaxMonth(classes, today, nowMonth) {
-  const exams = upcomingExams(classes, today);
-  if (!exams.length) return nowMonth;
-  const farthest = monthOf(exams[exams.length - 1].date);
-  return cmpMonth(farthest, nowMonth) > 0 ? farthest : nowMonth;
-}
-
 // Tapping a day opens every class scheduled on it with its own check —
-// useful when a day carries more than one class, since the calendar cell
-// itself can only show one blended colour, not each class's own state.
+// useful when a day carries more than one class, since a month cell can
+// only show one blended colour (and a time-grid block, though it's
+// already its own class, opens the same sheet for consistency: one tap
+// target behaviour everywhere in this view). classRow itself already
+// swaps a future day's checkbox for an inert clock icon, so opening this
+// for a day that hasn't happened yet is safe — nothing here lets you
+// mark tomorrow's class attended today.
 function openDayClassesSheet(store, dateKey) {
   let unsub = null;
   openSheet({
@@ -774,16 +770,38 @@ function openDayClassesSheet(store, dateKey) {
   });
 }
 
-let overviewMonth = null; // remembered month across re-renders, like nutrition's own history page
+// ---- view-mode state (module-level, survives re-renders — same idiom
+// history.js's own viewMemo/monthMemo use, one level up) ----
+let overviewMode = 'month'; // 'day' | 'week' | 'month'
+let overviewMonth = null;   // {y, m} — month view's paged month
+let overviewDay = null;     // date key — day view's shown day
+let overviewWeek = null;    // Monday date key — week view's shown week
 
+function rerenderOverview(store) {
+  const view = document.getElementById('view');
+  view.replaceChildren();
+  renderClassesOverview(view, store);
+}
+
+function overviewViewToggle(store) {
+  return h('div', { class: 'hist-viewtoggle' },
+    segmented([
+      { value: 'day', label: 'Daily' },
+      { value: 'week', label: 'Weekly' },
+      { value: 'month', label: 'Monthly' },
+    ], overviewMode, (v) => { overviewMode = v; rerenderOverview(store); }));
+}
+
+// Month view: unchanged blended-colour month grid, with one addition — a
+// future day that has something scheduled now gets its own "not done yet"
+// treatment (a hollow ring) instead of vanishing into the same flat grey
+// as a day with nothing on it at all, and every direction (including
+// forward) pages freely rather than stopping at the current month.
 function overviewCalendar(store, cur, today) {
-  const nowMonth = monthOf(today);
   const hasExams = upcomingExams(store.state.classes, today).length > 0;
-  const maxMonth = overviewMaxMonth(store.state.classes, today, nowMonth);
 
   const nav = (delta) => {
     const next = addMonths(cur, delta);
-    if (cmpMonth(next, maxMonth) > 0) return;
     overviewMonth = next;
     haptic(6);
     rebuild(next);
@@ -798,10 +816,7 @@ function overviewCalendar(store, cur, today) {
         h('div', { class: 'cal-month' }, monthLabel(m)),
         h('div', { class: 'cal-nav' },
           h('button', { class: 'icon-btn', 'aria-label': 'previous month', onclick: () => nav(-1) }, icon('chevL')),
-          h('button', {
-            class: 'icon-btn', 'aria-label': 'next month',
-            disabled: cmpMonth(m, maxMonth) >= 0, onclick: () => nav(1),
-          }, icon('chevR')))),
+          h('button', { class: 'icon-btn', 'aria-label': 'next month', onclick: () => nav(1) }, icon('chevR')))),
       h('div', { class: 'cal-grid' },
         WEEKDAYS_MIN.map((d) => h('div', { class: 'cal-dow' }, d)),
         monthGrid(m.y, m.m).flat().map((key) => {
@@ -809,14 +824,23 @@ function overviewCalendar(store, cur, today) {
           const isToday = key === today;
           if (key > today) {
             // A future day is otherwise a dead grey square — attendance
-            // hasn't happened yet — except an exam, which is exactly the
-            // thing worth seeing coming from a distance.
+            // hasn't happened yet — except an exam (brightest signal) or
+            // any other scheduled class ("not done yet" — what's left to
+            // do), each worth seeing coming from a distance.
             const examsOnDay = classesOccurringOn(store.state.classes, key).filter((e) => e.isExam);
             if (examsOnDay.length) {
               return h('button', {
                 class: 'cal-cell num future exam',
                 style: accentStyle(examsOnDay[0].color),
                 'aria-label': `${key}: exam — ${examsOnDay.map((e) => e.name).join(', ')}`,
+                onclick: () => openDayClassesSheet(store, key),
+              }, String(Number(key.slice(8))));
+            }
+            const { scheduled } = dayAttendance(store.state.classes, store.state.classDays, key);
+            if (scheduled > 0) {
+              return h('button', {
+                class: 'cal-cell num upcoming',
+                'aria-label': `${key}: ${scheduled} scheduled, not done yet`,
                 onclick: () => openDayClassesSheet(store, key),
               }, String(Number(key.slice(8))));
             }
@@ -849,13 +873,130 @@ function overviewCalendar(store, cur, today) {
   return box;
 }
 
+// ---- Day/Week views: an Apple Calendar-style time grid ----
+
+const HOUR_PX = 56;
+
+// Every occurrence on one day, resolved to its real time and attendance
+// status. Filters out anything classDayStatus would call 'empty' — a
+// class occurring on this weekday before it existed (classOccursOn's own
+// documented edge case, since it doesn't check createdAt itself) — so a
+// stray pre-creation occurrence never renders a phantom block.
+function dayOccurrences(store, dayKey, today) {
+  return classesOccurringOn(store.state.classes, dayKey)
+    .map((cls) => ({ cls, ...classTimeFor(cls, dayKey), status: classDayStatus(cls, store.state.classDays, dayKey, today) }))
+    .filter((o) => o.status !== 'empty');
+}
+
+function timeGridLegend(hasExams) {
+  const item = (style, label) => h('span', {}, h('i', { style }), label);
+  return h('div', { class: 'cal-legend' },
+    item('background:var(--c)', 'attended'),
+    item('background:rgba(228,87,61,0.28)', 'missed'),
+    item('background:var(--c-25);box-shadow:inset 0 0 0 1.5px var(--c)', 'not done yet'),
+    hasExams ? item('background:var(--c);box-shadow:0 0 6px 1px var(--c-70)', 'exam') : null);
+}
+
+// Shared grid for both the day view (`days.length === 1`) and the week
+// view (7 Monday-Sunday keys) — one vertical hour axis shared by every
+// column so a week's classes line up, sized to fit whatever's actually
+// scheduled (timeGridRange) rather than a fixed one-size-fits-all window.
+// Each occurrence is one absolutely-positioned block: top/height from its
+// own time, left/width from layoutTimeBlocks when it shares a slot with
+// another class that day. Colour carries status the same way the month
+// view's cells do — solid for attended, dimmed red for missed, a hollow
+// ring for not done yet — plus an exam's usual brighter glow on top.
+// Tapping any block opens that day's quick-check sheet, same as tapping a
+// month-view day cell.
+function timeGrid(store, days, today) {
+  const occByDay = days.map((d) => dayOccurrences(store, d, today));
+  const range = timeGridRange(occByDay.flat());
+  const heightPx = ((range.endMin - range.startMin) / 60) * HOUR_PX;
+  const hourMarks = [];
+  for (let m = range.startMin; m <= range.endMin; m += 60) hourMarks.push(m);
+  const topFor = (mins) => ((mins - range.startMin) / 60) * HOUR_PX;
+
+  const now = new Date();
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+
+  const dayCols = days.map((dayKey, i) => {
+    const laidOut = layoutTimeBlocks(occByDay[i]);
+    const blocks = laidOut.map(({ cls, startTime, durationMins, status, col, cols }) => {
+      const widthPct = 100 / cols;
+      const statusLabel = status === 'hit' ? 'attended' : status === 'miss' ? 'missed' : 'not done yet';
+      return h('button', {
+        class: `tg-block ${status} ${cls.isExam ? 'exam' : ''}`,
+        style: `top:${topFor(timeToMinutes(startTime))}px;height:${Math.max(20, (durationMins / 60) * HOUR_PX - 2)}px;` +
+          `left:${col * widthPct}%;width:calc(${widthPct}% - 3px);${accentStyle(cls.color)}`,
+        'aria-label': `${cls.name}, ${classTimeRange({ startTime, durationMins })}, ${statusLabel}`,
+        onclick: () => openDayClassesSheet(store, dayKey),
+      },
+        h('span', { class: 'tg-block-name' }, cls.name),
+        days.length === 1 ? h('span', { class: 'tg-block-time' }, classTimeRange({ startTime, durationMins })) : null);
+    });
+
+    const isToday = dayKey === today;
+    const nowLine = isToday && nowMins >= range.startMin && nowMins <= range.endMin
+      ? h('div', { class: 'tg-now', style: `top:${topFor(nowMins)}px` })
+      : null;
+
+    return h('div', { class: `tg-day-col ${isToday ? 'today' : ''}` },
+      hourMarks.map((m) => h('div', { class: 'tg-hourline', style: `top:${topFor(m)}px` })),
+      blocks, nowLine);
+  });
+
+  return h('div', { class: 'tg' },
+    days.length > 1 ? h('div', { class: 'tg-daynames' },
+      h('div', { class: 'tg-gutter-spacer' }),
+      days.map((d) => h('div', { class: `tg-dayname ${d === today ? 'today' : ''}` },
+        h('span', {}, WEEKDAYS[weekdayIndex(d)].slice(0, 3)),
+        h('span', { class: 'tg-daynum' }, String(Number(d.slice(8))))))) : null,
+    h('div', { class: 'tg-body', style: `height:${heightPx}px` },
+      h('div', { class: 'tg-gutter' },
+        hourMarks.map((m) => h('span', { class: 'tg-hour-label', style: `top:${topFor(m)}px` }, hourLabel12(m)))),
+      h('div', { class: 'tg-days' }, dayCols)));
+}
+
+function overviewDayNav(store, delta) {
+  overviewDay = addDays(overviewDay, delta);
+  haptic(6);
+  rerenderOverview(store);
+}
+
+function dayView(store, dayKey, today) {
+  const hasExams = classesOccurringOn(store.state.classes, dayKey).some((c) => c.isExam);
+  return h('div', { class: 'cal' },
+    h('div', { class: 'cal-head' },
+      h('div', { class: 'cal-month' }, longDate(dayKey)),
+      h('div', { class: 'cal-nav' },
+        h('button', { class: 'icon-btn', 'aria-label': 'previous day', onclick: () => overviewDayNav(store, -1) }, icon('chevL')),
+        h('button', { class: 'icon-btn', 'aria-label': 'next day', onclick: () => overviewDayNav(store, 1) }, icon('chevR')))),
+    timeGrid(store, [dayKey], today),
+    timeGridLegend(hasExams));
+}
+
+function overviewWeekNav(store, delta) {
+  overviewWeek = addWeeks(overviewWeek, delta);
+  haptic(6);
+  rerenderOverview(store);
+}
+
+function weekView(store, monday, today) {
+  const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
+  const hasExams = days.some((d) => classesOccurringOn(store.state.classes, d).some((c) => c.isExam));
+  return h('div', { class: 'cal' },
+    h('div', { class: 'cal-head' },
+      h('div', { class: 'cal-month' }, weekLabel(monday, today)),
+      h('div', { class: 'cal-nav' },
+        h('button', { class: 'icon-btn', 'aria-label': 'previous week', onclick: () => overviewWeekNav(store, -1) }, icon('chevL')),
+        h('button', { class: 'icon-btn', 'aria-label': 'next week', onclick: () => overviewWeekNav(store, 1) }, icon('chevR')))),
+    timeGrid(store, days, today),
+    timeGridLegend(hasExams));
+}
+
 export function renderClassesOverview(root, store) {
   const today = todayKey();
   const stats = allClassesStats(store.state.classes, store.state.classDays, today);
-  const nowMonth = monthOf(today);
-  const maxMonth = overviewMaxMonth(store.state.classes, today, nowMonth);
-  let cur = overviewMonth || nowMonth;
-  if (cmpMonth(cur, maxMonth) > 0) cur = maxMonth;
 
   if (!Object.keys(store.state.classes).length) {
     root.append(h('div', { style: accentStyle(OVERVIEW_ACCENT) },
@@ -866,9 +1007,21 @@ export function renderClassesOverview(root, store) {
     return;
   }
 
+  let body;
+  if (overviewMode === 'day') {
+    if (!overviewDay) overviewDay = today;
+    body = dayView(store, overviewDay, today);
+  } else if (overviewMode === 'week') {
+    if (!overviewWeek) overviewWeek = mondayOf(today);
+    body = weekView(store, overviewWeek, today);
+  } else {
+    body = overviewCalendar(store, overviewMonth || monthOf(today), today);
+  }
+
   root.append(h('div', { style: accentStyle(OVERVIEW_ACCENT) },
     overviewHeader(store),
     overviewStatsGrid(stats),
-    overviewCalendar(store, cur, today),
+    overviewViewToggle(store),
+    body,
   ));
 }

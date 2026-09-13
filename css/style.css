@@ -291,7 +291,12 @@ input, select, textarea { font: inherit; color: inherit; }
 .offweek-remove { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: var(--faint); flex: none; }
 .offweek-remove:active { background: var(--raise); color: var(--text); }
 .offweek-remove svg { width: 14px; height: 14px; }
+/* min-width:0 overrides the flex default (min-width:auto), which otherwise
+   refuses to shrink a date input below its native content width — without
+   it, this row (and the sheet around it) overflows horizontally instead of
+   the input actually shrinking to fit */
 .offweek-form { display: flex; gap: 8px; }
+.offweek-form input { min-width: 0; }
 .offweek-add { width: auto; height: 44px; padding: 0 16px; flex: none; white-space: nowrap; }
 .offweek-add svg { width: 16px; height: 16px; }
 
@@ -697,6 +702,7 @@ input[type="time"].input { line-height: 48px; }
   transition: transform 0.42s var(--spring);
   pointer-events: auto;
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
@@ -1060,6 +1066,12 @@ input[type="date"].input { line-height: 48px; }
    one calendar day worth noticing well before it arrives. */
 .cal-cell.exam { background: var(--c); color: var(--on-c); opacity: 1; box-shadow: 0 0 0 2px var(--c), 0 0 16px -3px var(--c-70); }
 .cal-cell.exam.today { box-shadow: 0 0 0 2px var(--c), 0 0 16px -3px var(--c-70), inset 0 0 0 1.5px var(--on-c); }
+/* A scheduled-but-future day ("not done yet") reads as a hollow ring of
+   the accent rather than either a solid fill (that's earned, once
+   attended) or the plain dimmed grey a day with nothing on it gets —
+   distinguishing "there's something coming up here" from "nothing to see"
+   at a glance across a whole month. */
+.cal-cell.upcoming { background: var(--c-25); box-shadow: inset 0 0 0 1.5px var(--c); color: var(--text); opacity: 1; }
 /* the all-classes overview colours cells by inline alpha rather than a
    status class (see attendanceColor in js/views/classes.js) — near-full
    attendance is bright enough to need .hit's own light-on-dark text flip */
@@ -1084,6 +1096,70 @@ input[type="date"].input { line-height: 48px; }
   font-weight: 600;
 }
 .cal-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; margin-right: 5px; vertical-align: -1px; }
+
+/* ---------- Apple Calendar-style day/week time grid (all-classes
+   overview) — a shared hour axis down the left, one column per visible
+   day, each class an absolutely-positioned block sized to its own
+   duration. See timeGrid() in js/views/classes.js. ---------- */
+.tg-daynames { display: flex; padding: 2px 0 8px; }
+.tg-gutter-spacer { width: 38px; flex: none; }
+.tg-dayname { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.tg-dayname span:first-child { font-size: 10.5px; font-weight: 700; color: var(--faint); text-transform: uppercase; letter-spacing: 0.03em; }
+.tg-daynum { font-size: 14px; font-weight: 800; color: var(--text); }
+.tg-dayname.today span:first-child, .tg-dayname.today .tg-daynum { color: var(--c); }
+
+.tg-body { display: flex; position: relative; }
+.tg-gutter { width: 38px; flex: none; position: relative; }
+.tg-hour-label {
+  position: absolute;
+  right: 6px;
+  transform: translateY(-50%);
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--faint);
+  white-space: nowrap;
+}
+.tg-days {
+  flex: 1;
+  display: flex;
+  position: relative;
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+}
+.tg-day-col { flex: 1; position: relative; border-right: 1px solid var(--line); }
+.tg-day-col.today { background: var(--raise2); }
+.tg-hourline { position: absolute; left: 0; right: 0; border-top: 1px solid var(--line); pointer-events: none; }
+
+/* Colour carries attendance status; every block also gets a left edge of
+   its own class colour so identity reads even where status uses a fixed
+   tint (missed) rather than the class's own hue. */
+.tg-block {
+  position: absolute;
+  border-radius: 6px;
+  padding: 3px 5px;
+  text-align: left;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border-left: 3px solid var(--c);
+  transition: transform 0.15s var(--spring);
+}
+.tg-block:active { transform: scale(0.96); }
+.tg-block.hit { background: var(--c); color: var(--on-c); }
+.tg-block.miss { background: rgba(228, 87, 61, 0.16); color: rgba(255, 150, 125, 0.9); border-left-color: rgba(228, 87, 61, 0.7); }
+.tg-block.pending, .tg-block.future {
+  background: var(--c-25);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1.5px var(--c);
+}
+.tg-block.exam { box-shadow: 0 0 0 2px var(--c), 0 0 14px -3px var(--c-70); }
+.tg-block.exam.pending, .tg-block.exam.future { box-shadow: inset 0 0 0 1.5px var(--c), 0 0 14px -3px var(--c-70); }
+.tg-block-name { font-size: 11.5px; font-weight: 700; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tg-block-time { font-size: 10px; font-weight: 600; opacity: 0.85; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.tg-now { position: absolute; left: 0; right: 0; height: 0; border-top: 2px solid #E4573D; z-index: 3; pointer-events: none; }
+.tg-now::before { content: ''; position: absolute; left: -3px; top: -3.5px; width: 7px; height: 7px; border-radius: 50%; background: #E4573D; }
 
 .hist-viewtoggle { margin: 14px 0 4px; }
 .hist-viewtoggle .seg { width: 100%; }
