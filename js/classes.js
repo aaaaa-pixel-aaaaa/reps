@@ -8,7 +8,7 @@
 // functions one level up: an occurrence day, not every calendar day, is the
 // unit a class's streak counts over.
 
-import { addDays, todayKey, weekdayIndex, mondayOf } from './dates.js';
+import { addDays, todayKey, weekdayIndex, mondayOf, daysBetween } from './dates.js';
 
 const pad2 = (n) => String(n).padStart(2, '0');
 
@@ -74,6 +74,21 @@ export function classOccursOn(cls, dateKey) {
 
 export function isOneOff(cls) {
   return !!cls.date;
+}
+
+// A "one week only" schedule — different days/times that happen just once,
+// for a single specific week (a one-off work roster: Mon 9-11, Tue 3-5,
+// Thu 4-5) — is really just a recurring class (`days` + `perDayTimes`)
+// whose `startDate`/`endDate` happen to bound it to exactly that one
+// Monday-Sunday week. No new field, no special case anywhere else: a class
+// that simply doesn't recur past its own endDate already behaves exactly
+// right (classOccursOn, classStats, ...). This is purely a UI-facing
+// classification so the editor's "repeats" toggle and the schedule
+// summary can recognise and round-trip it distinctly from an ordinary
+// recurring class that happens to carry a short date range.
+export function isOneWeekOnly(cls) {
+  return !cls.date && !!cls.startDate && !!cls.endDate &&
+    cls.startDate === mondayOf(cls.startDate) && daysBetween(cls.startDate, cls.endDate) === 6;
 }
 
 export function isClassDone(classDays, dateKey, classId) {

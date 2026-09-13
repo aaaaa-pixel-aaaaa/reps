@@ -17,6 +17,7 @@ import {
   classOccursOn, isClassDone, classesForDay, classesOccurringOn, dayAttendance, todayClassSummary,
   classDayStatus, nextOccurrence, classStats, allClassesStats,
   upcomingExams, examCountdown, timeToMinutes, hourLabel12, timeGridRange, layoutTimeBlocks,
+  isOneWeekOnly,
 } from '../js/classes.js';
 import { pinnedTrackers, groupTrackers, reorderContext } from '../js/model.js';
 import { wrapDelta, stepsFor, angleAt } from '../js/wheel.js';
@@ -1458,6 +1459,20 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
   const offWeekStats = classStats(offWeekCls, {}, '2026-07-27');
   eq(offWeekStats.scheduled, 3, 'the off week\'s two occurrences are excluded from scheduled entirely, not just marked missed');
 
+  // isOneWeekOnly: a "just once, but a whole week of different days/times"
+  // schedule is, underneath, a recurring class whose startDate/endDate
+  // exactly bound one Monday-Sunday week — 2026-07-13 is a Monday.
+  eq(isOneWeekOnly({ days: [0, 2], startDate: '2026-07-13', endDate: '2026-07-19' }), true,
+    'startDate a Monday and endDate exactly 6 days later: recognised as one-week-only');
+  eq(isOneWeekOnly({ days: [0, 2], startDate: '2026-07-14', endDate: '2026-07-20' }), false,
+    'startDate not itself a Monday: not one-week-only, even though the span is 7 days');
+  eq(isOneWeekOnly({ days: [0, 2], startDate: '2026-07-13', endDate: '2026-07-26' }), false,
+    'a two-week span from the same Monday: not one-week-only');
+  eq(isOneWeekOnly({ days: [0, 2], startDate: '2026-07-13', endDate: null }), false,
+    'no endDate at all (an ordinary open-ended recurring class): not one-week-only');
+  eq(isOneWeekOnly({ days: [0], date: '2026-07-13', startDate: '2026-07-13', endDate: '2026-07-19' }), false,
+    'a one-off event (`date` set) is never one-week-only, regardless of what startDate/endDate say');
+
   // one-off events: `date` set means the class meets exactly once, on that
   // date, regardless of `days`/`startDate`/`endDate` (normalizeClass keeps
   // those empty, but classOccursOn ignores them either way as a safety net).
@@ -1606,6 +1621,27 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
   });
   eq(store.state.classes[offWeekClassId].offWeeks, ['2026-07-20', '2026-08-03'],
     'offWeeks snapped to each week\'s Monday, deduped (both 07-20 and 07-22 land on the same Monday), sorted, invalid entry dropped');
+
+  // "One week" editor mode saves as a plain recurring class + perDayTimes
+  // bounded to exactly one Monday-Sunday week — no dedicated field, so
+  // this is really just confirming isOneWeekOnly recognises what the
+  // store actually persists (normalizeClass already validates
+  // days/perDayTimes/startDate/endDate generically).
+  const oneWeekId = store.addClass({
+    name: 'Temp roster', days: [0, 1, 3],
+    perDayTimes: {
+      0: { startTime: '09:00', durationMins: 120 }, // Mon 9-11
+      1: { startTime: '15:00', durationMins: 120 }, // Tue 3-5
+      3: { startTime: '16:00', durationMins: 60 },  // Thu 4-5
+    },
+    startDate: '2026-07-13', endDate: '2026-07-19', startTime: '09:00', durationMins: 120,
+  });
+  const savedOneWeek = store.state.classes[oneWeekId];
+  eq(isOneWeekOnly(savedOneWeek), true, 'a saved one-week schedule round-trips as recognisably one-week-only');
+  eq(classOccursOn(savedOneWeek, '2026-07-13'), true, 'Monday within the week occurs');
+  eq(classOccursOn(savedOneWeek, '2026-07-14'), true, 'Tuesday within the week occurs');
+  eq(classOccursOn(savedOneWeek, '2026-07-20'), false, 'the following Monday: past endDate, never recurs');
+  eq(classTimeFor(savedOneWeek, '2026-07-14'), { startTime: '15:00', durationMins: 120 }, 'Tuesday keeps its own overridden time');
 
   // perDayTimes: a stale entry for a day no longer in `days` is dropped;
   // an entry for a day that is stays and is validated on its own. A

@@ -34,8 +34,11 @@ Add-to-Home-Screen app.
   specific **off weeks** — a break, a public holiday — skipped entirely)
   and can be **linked** to a time counter — marking one attended logs its
   scheduled duration onto that tracker automatically (a 2-hour tutorial
-  adds 2 hours to "Study"), and un-marking reverses it. A one-off class can
-  also be flagged an **exam** — a persistent "upcoming" entry on the tile, a
+  adds 2 hours to "Study"), and un-marking reverses it. A class can also
+  be scoped to **one week only** — different days and times that happen
+  once for a single specific week, like a temp roster — or a single
+  one-off event on one exact date. A one-off event can also be flagged an
+  **exam** — a persistent "upcoming" entry on the tile, a
   brighter accent everywhere it's shown, and optional reminder
   notifications ahead of the date, however far out it is. Off by default;
   add it from **New tracker**. See [Classes](#classes) below.
@@ -114,17 +117,38 @@ through the same one function. Meaningless for a one-off event or exam
 (`normalizeClass` clears it right alongside `startDate`/`endDate` when
 `date` is set) — there's no "week" for a single date to belong to.
 
+### One week (a one-off multi-day schedule)
+
+The editor's "repeats" toggle has a third option between "Every week" and
+"Just once": **"One week"** — a schedule that happens across several days
+of one specific week and then never again, each day on its own time (a
+temp work roster: Mon 9–11, Tue 3–5, Thu 4–5). There's no dedicated field
+for this at all — it's `isOneWeekOnly` (`js/classes.js`) recognising an
+ordinary recurring class (`days` + `perDayTimes`) whose `startDate`/
+`endDate` happen to bound it to exactly one Monday–Sunday week, the same
+fields the semester-range feature above already uses. `classOccursOn`
+needs no special case either: a class that simply stops recurring past its
+own `endDate` already behaves exactly right. Picking "One week" always
+shows one time row per selected day straight away (no separate "different
+time each day" switch to find first, since per-day variation is the entire
+point of this mode) and a single "week of" date field — pick any day in
+the target week and it snaps to that week's Monday, the same
+pick-any-day-snap-to-Monday idiom off weeks already use. The manage list
+and a class's own history both recognise the shape and label it "One week
+· 14–20 Jul" rather than showing it as a coincidentally-short recurring
+class.
+
 ### Events (one-off classes)
 
-The editor's "repeats" toggle ("Every week" / "Just once") is the only
-difference between a class and an **event** — picking "Just once" sets
-`date` to a single day instead of `days`, and `classOccursOn` treats that as
-the whole schedule: it meets on that exact date and never again, full stop,
-ignoring `days`/`startDate`/`endDate` entirely (`normalizeClass` keeps them
-empty too, so stored data never carries two conflicting ideas of when the
-thing happens). Everything else — time, duration, location, linking,
-colour, its own history page — works identically, since none of it cares
-whether an occurrence came from a weekday match or a single fixed date.
+The editor's "repeats" toggle's third option, "Just once", is the other
+difference between a class and an **event** — it sets `date` to a single
+day instead of `days`, and `classOccursOn` treats that as the whole
+schedule: it meets on that exact date and never again, full stop, ignoring
+`days`/`startDate`/`endDate` entirely (`normalizeClass` keeps them empty
+too, so stored data never carries two conflicting ideas of when the thing
+happens). Everything else — time, duration, location, linking, colour, its
+own history page — works identically, since none of it cares whether an
+occurrence came from a weekday match or a single fixed date.
 
 ### Exams
 

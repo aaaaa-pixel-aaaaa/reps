@@ -16,7 +16,7 @@ import {
   fmtTime12, addMinutesToTime, classTimeRange, classTimeForDay, classTimeFor,
   classOccursOn, isClassDone, classesForDay, classesOccurringOn, dayAttendance, todayClassSummary,
   classDayStatus, nextOccurrence, classStats, allClassesStats,
-  upcomingExams, examCountdown, EXAM_REMINDER_PRESETS,
+  upcomingExams, examCountdown, EXAM_REMINDER_PRESETS, isOneWeekOnly,
   timeToMinutes, hourLabel12, timeGridRange, layoutTimeBlocks,
 } from '../classes.js';
 import { PALETTE } from '../store.js';
@@ -133,6 +133,7 @@ export function renderClassesTile(store) {
 
 function classDaysLabel(c) {
   if (c.date) return `${c.isExam ? 'Exam' : 'Once'} · ${shortDate(c.date)}`;
+  if (isOneWeekOnly(c)) return `One week · ${weekLabel(c.startDate)}`;
   return c.days.length === 7 ? 'Every day' : c.days.map((d) => WEEKDAYS_MIN[d]).join('');
 }
 
@@ -141,18 +142,23 @@ function dayRangeLabel(c, dayIndex) {
   return `${fmtTime12(t.startTime)}–${fmtTime12(addMinutesToTime(t.startTime, t.durationMins))}`;
 }
 
-// A class's overall schedule as one line, for anywhere it's described
-// independent of any specific date (the manage sheet's row note, a class's
-// own history hero). A `perDayTimes` class spells out each day's own
-// range rather than a single shared one, since a shared range would be
-// wrong for at least one of its days.
 function offWeeksNote(c) {
   const n = c.offWeeks ? c.offWeeks.length : 0;
   return n ? ` · ${n} week${n === 1 ? '' : 's'} off` : '';
 }
 
+// A class's overall schedule as one line, for anywhere it's described
+// independent of any specific date (the manage sheet's row note, a class's
+// own history hero). A `perDayTimes` class spells out each day's own
+// range rather than a single shared one, since a shared range would be
+// wrong for at least one of its days — a one-week-only schedule is always
+// exactly this shape (see isOneWeekOnly, js/classes.js), just with its
+// one week named up front instead of an off-weeks note at the end.
 function classScheduleSummary(c) {
   if (c.date) return `${c.isExam ? 'Exam' : 'Once'} · ${shortDate(c.date)} · ${classTimeRange(c)}`;
+  if (isOneWeekOnly(c)) {
+    return `${weekLabel(c.startDate)} · ` + c.days.map((d) => `${WEEKDAYS_MIN[d]} ${dayRangeLabel(c, d)}`).join(', ');
+  }
   if (!c.perDayTimes) return `${classDaysLabel(c)} · ${classTimeRange(c)}${offWeeksNote(c)}`;
   return c.days.map((d) => `${WEEKDAYS_MIN[d]} ${dayRangeLabel(c, d)}`).join(', ') + offWeeksNote(c);
 }
@@ -412,12 +418,35 @@ export function openClassEditor(store, classId = null, onSaved = null) {
       const scheduleBox = h('div', {});
       function renderSchedule() {
         const once = !!f.date;
+        const oneWeek = !once && isOneWeekOnly(f);
+        const mode = once ? 'once' : oneWeek ? 'week' : 'weekly';
         const repeatsToggle = field('repeats', segmented([
           { value: 'weekly', label: 'Every week' },
+          { value: 'week', label: 'One week' },
           { value: 'once', label: 'Just once' },
-        ], once ? 'once' : 'weekly', (v) => {
-          if (v === 'once') { f.date = f.date || todayKey(); f.days = []; f.perDayTimes = null; f.startDate = null; f.endDate = null; f.offWeeks = []; }
-          else { f.date = null; f.isExam = false; f.reminders = []; f.notifiedReminders = []; }
+        ], mode, (v) => {
+          if (v === 'once') {
+            f.date = f.date || todayKey();
+            f.days = []; f.perDayTimes = null; f.startDate = null; f.endDate = null; f.offWeeks = [];
+          } else if (v === 'week') {
+            f.date = null; f.isExam = false; f.reminders = []; f.notifiedReminders = []; f.offWeeks = [];
+            // Snap to the week already set (if it was already exactly one
+            // week) or the current week otherwise — never left blank, so
+            // there's always a real week to show days/times against.
+            const monday = f.startDate && f.startDate === mondayOf(f.startDate) ? f.startDate : mondayOf(todayKey());
+            f.startDate = monday;
+            f.endDate = addDays(monday, 6);
+            f.perDayTimes = f.perDayTimes || {};
+            for (const day of f.days) f.perDayTimes[day] = f.perDayTimes[day] || { startTime: f.startTime, durationMins: f.durationMins };
+          } else {
+            // Every week: startDate/endDate/perDayTimes are left exactly
+            // as they are — this mode's own "limit to a date range" and
+            // "different time each day" switches already expose and can
+            // clear them, so a class arriving from "one week" simply shows
+            // up as a recurring class already scoped to that one week,
+            // which is both correct and easy to broaden from here.
+            f.date = null; f.isExam = false; f.reminders = []; f.notifiedReminders = [];
+          }
           renderSchedule();
         }));
 
@@ -463,6 +492,54 @@ export function openClassEditor(store, classId = null, onSaved = null) {
           renderExamBox();
 
           scheduleBox.replaceChildren(repeatsToggle, field('date', dateInput), sharedTimeFields, examBox);
+          return;
+        }
+
+        // "One week": a one-off schedule spread across several days of a
+        // single specific week, each on its own time — a temp roster
+        // (Mon 9-11, Tue 3-5, Thu 4-5), a one-off makeup-class week, and
+        // so on. Under the hood it's an ordinary recurring class (`days` +
+        // `perDayTimes`) whose startDate/endDate happen to bound it to
+        // exactly that Monday-Sunday week (isOneWeekOnly, js/classes.js) —
+        // classOccursOn already stops it dead at endDate, so nothing else
+        // needs to know this mode exists at all. Always shows one time row
+        // per day (no "different time each day" toggle to find first),
+        // since per-day variation is the entire point here.
+        if (oneWeek) {
+          const weekInput = h('input', { class: 'input num', type: 'date' });
+          weekInput.value = f.startDate;
+          const weekHint = h('div', { class: 'hint', style: 'margin-top:-6px' });
+          const updateWeekHint = () => { weekHint.textContent = weekLabel(f.startDate); };
+          updateWeekHint();
+          weekInput.addEventListener('input', () => {
+            if (!isValidKey(weekInput.value)) return;
+            f.startDate = mondayOf(weekInput.value);
+            f.endDate = addDays(f.startDate, 6);
+            updateWeekHint();
+          });
+
+          const dayBtns = WEEKDAYS_MIN.map((label, i) => h('button', {
+            class: `dp-btn ${f.days.includes(i) ? 'on' : ''}`,
+            type: 'button',
+            'aria-pressed': String(f.days.includes(i)),
+            'aria-label': WEEKDAYS[i],
+            onclick: () => {
+              const wasOn = f.days.includes(i);
+              f.days = wasOn ? f.days.filter((d) => d !== i) : [...f.days, i].sort((x, y) => x - y);
+              if (wasOn) delete f.perDayTimes[i];
+              else f.perDayTimes[i] = { startTime: f.startTime, durationMins: f.durationMins };
+              haptic(6);
+              renderSchedule();
+            },
+          }, label));
+
+          scheduleBox.replaceChildren(...[
+            repeatsToggle,
+            field('week of', weekInput),
+            weekHint,
+            field('days', h('div', { class: 'daypicker' }, dayBtns), 'tap every day it happens that week'),
+            f.days.length ? h('div', { class: 'perday-list' }, f.days.map((d) => perDayRow(d))) : null,
+          ].filter(Boolean));
           return;
         }
 
