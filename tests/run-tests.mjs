@@ -17,7 +17,7 @@ import {
   classOccursOn, isClassDone, classesForDay, classesOccurringOn, dayAttendance, todayClassSummary,
   classDayStatus, nextOccurrence, classStats, allClassesStats,
   upcomingExams, examCountdown, timeToMinutes, hourLabel12, timeGridRange, layoutTimeBlocks,
-  isOneWeekOnly,
+  isOneWeekOnly, homeCardExams,
 } from '../js/classes.js';
 import { pinnedTrackers, groupTrackers, reorderContext } from '../js/model.js';
 import { wrapDelta, stepsFor, angleAt } from '../js/wheel.js';
@@ -1510,6 +1510,19 @@ eq(Math.round(angleAt(0, 0, -10, 0)), -90, '9 oclock is -90deg');
   eq(examCountdown(0), 'today', 'examCountdown: 0 days away reads as today');
   eq(examCountdown(1), 'tomorrow', 'examCountdown: 1 day away reads as tomorrow');
   eq(examCountdown(5), 'in 5 days', 'examCountdown: further out spells out the day count');
+
+  // homeCardExams: the Classes tile only surfaces an exam within its lead
+  // window (default a week) — unlike upcomingExams, which the calendars
+  // keep using unfiltered so browsing forward still shows everything.
+  const leadExams = {
+    todaysExam: { id: 'todaysExam', name: 'Today', date: '2026-07-13', isExam: true, archived: false },
+    boundary: { id: 'boundary', name: 'Exactly a week out', date: '2026-07-20', isExam: true, archived: false },
+    justPast: { id: 'justPast', name: 'One day past the window', date: '2026-07-21', isExam: true, archived: false },
+  };
+  eq(homeCardExams(leadExams, '2026-07-13').map((c) => c.id), ['boundary'],
+    'today\'s own exam is excluded (it already shows glowing in the today list itself), and exactly 7 days out is included, 8 is not');
+  eq(homeCardExams(leadExams, '2026-07-13', 14).map((c) => c.id), ['boundary', 'justPast'],
+    'a wider explicit lead window picks up more exams, confirming the default is just a default');
 
   // allClassesStats: two classes both created 2026-07-13. Mon-only "A" and
   // Mon+Wed "B" over the same three weeks; one Monday (07-20) both classes

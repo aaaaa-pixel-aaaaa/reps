@@ -16,7 +16,7 @@ import {
   fmtTime12, addMinutesToTime, classTimeRange, classTimeForDay, classTimeFor,
   classOccursOn, isClassDone, classesForDay, classesOccurringOn, dayAttendance, todayClassSummary,
   classDayStatus, nextOccurrence, classStats, allClassesStats,
-  upcomingExams, examCountdown, EXAM_REMINDER_PRESETS, isOneWeekOnly,
+  upcomingExams, examCountdown, EXAM_REMINDER_PRESETS, isOneWeekOnly, homeCardExams,
   timeToMinutes, hourLabel12, timeGridRange, layoutTimeBlocks,
 } from '../classes.js';
 import { PALETTE } from '../store.js';
@@ -92,10 +92,11 @@ export function renderClassesTile(store) {
   const list = classesForDay(classes, today);
   const anyClasses = Object.keys(classes).length > 0;
   const { total, done } = todayClassSummary(classes, classDays, today);
-  // Strictly future — today's own exam already shows (glowing) in the
-  // today list above, via the same classesForDay/classRow every other
-  // class goes through, so it isn't repeated here.
-  const laterExams = upcomingExams(classes, today).filter((c) => c.date > today).slice(0, 3);
+  // homeCardExams already excludes today's own exam (it shows glowing in
+  // the today list above, via the same classesForDay/classRow every other
+  // class goes through) and anything further out than its lead window —
+  // a final next semester would just be daily clutter until it's close.
+  const laterExams = homeCardExams(classes, today).slice(0, 3);
 
   const nextExam = laterExams[0];
   const sub = !anyClasses ? 'Add your timetable to get started'
@@ -1014,9 +1015,16 @@ function timeGrid(store, days, today) {
         class: `tg-block ${status} ${cls.isExam ? 'exam' : ''} ${narrow ? 'narrow' : ''}`,
         style: `top:${topFor(timeToMinutes(startTime))}px;height:${Math.max(20, (durationMins / 60) * HOUR_PX - 2)}px;` +
           `left:${col * widthPct}%;width:calc(${widthPct}% - 3px);${accentStyle(cls.color)}`,
-        'aria-label': `${cls.name}, ${classTimeRange({ startTime, durationMins })}, ${statusLabel}`,
+        'aria-label': `${cls.name}, ${classTimeRange({ startTime, durationMins })}, ${statusLabel}${cls.isExam ? ', exam' : ''}`,
         onclick: () => openDayClassesSheet(store, dayKey),
       },
+        // The week grid's glow alone reads weak at ~40px wide — a fixed-size
+        // badge doesn't shrink with the column the way a box-shadow's visual
+        // weight effectively does, so it stays an unambiguous "exam" signal
+        // regardless of how narrow the block is. Day view already has a
+        // whole column to itself, where the plain glow reads fine, so this
+        // is narrow-only.
+        narrow && cls.isExam ? h('span', { class: 'tg-exam-badge' }, icon('bell')) : null,
         h('span', { class: `tg-block-name ${narrow ? 'wrap' : ''}` }, cls.name),
         !narrow ? h('span', { class: 'tg-block-time' }, classTimeRange({ startTime, durationMins })) : null);
     });

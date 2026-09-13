@@ -1162,6 +1162,31 @@ input[type="date"].input { line-height: 48px; }
    just after reading far more of the name). Tighter padding and
    border-left claw back a couple more pixels of width for the text. */
 .tg-block.narrow { padding: 2px 3px; border-left-width: 2px; }
+/* The plain exam glow above reads weak once a block shrinks down to a
+   narrow week column — a solid outer ring plus a wider, less-blurred glow
+   (rather than the inset ring the pending/future case above would
+   otherwise win, since this has equal specificity and comes later) pops
+   far more clearly at that size; the fixed-size badge below backs it up
+   regardless of how compressed the block gets. */
+.tg-block.narrow.exam { box-shadow: 0 0 0 1.5px var(--c), 0 0 9px 1px var(--c-70); }
+.tg-exam-badge {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--c);
+  color: var(--on-c);
+  box-shadow: 0 0 5px 1px var(--c-70);
+}
+.tg-exam-badge svg { width: 8px; height: 8px; }
+/* Reserves room so wrapped text doesn't render underneath the badge (a
+   positioned element, so it paints above the plain in-flow text
+   regardless of DOM order) rather than just being covered by it. */
+.tg-block.narrow.exam .tg-block-name { padding-right: 12px; }
 .tg-block-name { font-size: 11.5px; font-weight: 700; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tg-block-name.wrap { font-size: 9.5px; line-height: 1.15; white-space: normal; overflow-wrap: anywhere; text-overflow: clip; }
 .tg-block-time { font-size: 10px; font-weight: 600; opacity: 0.85; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

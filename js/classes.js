@@ -214,13 +214,26 @@ export const EXAM_REMINDER_PRESETS = [
   { days: 30, label: '1 month before' },
 ];
 
-// Every not-yet-happened exam, soonest first — the Classes card's own
-// "upcoming exams" list, since an exam (unlike a class) is worth surfacing
-// well before the day it actually falls on.
+// Every not-yet-happened exam, soonest first — the building block both the
+// Classes tile's "upcoming" list and the calendars' bright-cell treatment
+// use, since an exam (unlike a class) is worth surfacing well before the
+// day it actually falls on.
 export function upcomingExams(classes, today = todayKey()) {
   return Object.values(classes)
     .filter((c) => c.isExam && !c.archived && c.date >= today)
     .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// The Classes tile only surfaces an exam once it's getting close — one
+// booked for next semester would just be daily clutter until then. Kept
+// separate from upcomingExams itself, which the calendars keep using
+// unfiltered: browsing forward is the whole point there, so every exam
+// should stay visible however far out it is, even while the tile stays
+// quiet about it.
+export const EXAM_CARD_LEAD_DAYS = 7;
+
+export function homeCardExams(classes, today = todayKey(), leadDays = EXAM_CARD_LEAD_DAYS) {
+  return upcomingExams(classes, today).filter((c) => c.date > today && daysBetween(today, c.date) <= leadDays);
 }
 
 // "today" / "tomorrow" / "in 12 days" — the countdown copy for an upcoming

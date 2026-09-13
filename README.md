@@ -162,6 +162,18 @@ those calendars wouldn't otherwise let you page into), a persistent
 before the day it falls on rather than only the day of, and optional
 reminder notifications ahead of the date.
 
+The tile's own "upcoming" list only starts showing an exam once it's
+within `EXAM_CARD_LEAD_DAYS` (`js/classes.js`, `homeCardExams`, default a
+week) — one booked for next semester would just be daily clutter on the
+home screen until it's actually close. The calendars are unaffected: they
+keep using the unfiltered `upcomingExams` list, since showing everything
+regardless of distance is the whole point of a calendar you can page
+forward through. In the Week/Day time grid specifically, an exam block
+also gets a small badge (the same bell icon used elsewhere) pinned to its
+corner in the narrow week view — the plain glow treatment alone reads weak
+once a block shrinks down to a ~40px-wide column, so the badge is a
+fixed-size backup signal that doesn't shrink along with it.
+
 `reminders` is a set of day-offsets picked from a fixed preset menu (same
 day, or 1/3/7/14/30 days before) rather than a free-typed number — a bad
 free-typed value could silently produce a reminder that never fires.
