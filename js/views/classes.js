@@ -924,15 +924,24 @@ function timeGrid(store, days, today) {
     const blocks = laidOut.map(({ cls, startTime, durationMins, status, col, cols }) => {
       const widthPct = 100 / cols;
       const statusLabel = status === 'hit' ? 'attended' : status === 'miss' ? 'missed' : 'not done yet';
+      // A week column is only ~40px wide — nowhere near enough for a
+      // class name on one line — so it wraps to as many lines as the
+      // block's own height (from its duration) allows instead of
+      // ellipsis-ing down to a single surviving letter; the block's own
+      // overflow:hidden crops anything past that, same as a single-line
+      // truncation would, just with far more of the name actually read.
+      // The day view has a whole column to itself, so it keeps the
+      // original single-line-plus-time layout.
+      const narrow = days.length > 1;
       return h('button', {
-        class: `tg-block ${status} ${cls.isExam ? 'exam' : ''}`,
+        class: `tg-block ${status} ${cls.isExam ? 'exam' : ''} ${narrow ? 'narrow' : ''}`,
         style: `top:${topFor(timeToMinutes(startTime))}px;height:${Math.max(20, (durationMins / 60) * HOUR_PX - 2)}px;` +
           `left:${col * widthPct}%;width:calc(${widthPct}% - 3px);${accentStyle(cls.color)}`,
         'aria-label': `${cls.name}, ${classTimeRange({ startTime, durationMins })}, ${statusLabel}`,
         onclick: () => openDayClassesSheet(store, dayKey),
       },
-        h('span', { class: 'tg-block-name' }, cls.name),
-        days.length === 1 ? h('span', { class: 'tg-block-time' }, classTimeRange({ startTime, durationMins })) : null);
+        h('span', { class: `tg-block-name ${narrow ? 'wrap' : ''}` }, cls.name),
+        !narrow ? h('span', { class: 'tg-block-time' }, classTimeRange({ startTime, durationMins })) : null);
     });
 
     const isToday = dayKey === today;
