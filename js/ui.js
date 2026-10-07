@@ -262,7 +262,9 @@ export function ringSVG(size, stroke, progress, band, ticks = []) {
     if (!(f >= 0 && f <= 1)) continue;
     // the svg is rotated -90deg in CSS, so angle 0 here sits at 12 o'clock
     const ang = 2 * Math.PI * f;
-    const r0 = r - stroke / 2 - 2, r1 = r + stroke / 2 + 2;
+    // Span exactly the stroke's width: the old +2px overhang ran past the
+    // viewBox edge (r + stroke/2 == size/2) and got clipped on the outside.
+    const r0 = r - stroke / 2, r1 = r + stroke / 2;
     const cx = size / 2, cy = size / 2;
     const ln = document.createElementNS(NS, 'line');
     ln.setAttribute('x1', cx + r0 * Math.cos(ang)); ln.setAttribute('y1', cy + r0 * Math.sin(ang));

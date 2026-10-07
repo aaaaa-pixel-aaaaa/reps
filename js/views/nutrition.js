@@ -137,12 +137,20 @@ function glyphSpan(glyph) {
 
 let lastEnergyProgress = null;
 let lastEnergyColor = null;
-function energyRing(model, color, ticks = []) {
-  const progress = model.unknown ? 0 : model.fillFrac;
+// The ring maps energy linearly onto [0, railMax] rather than through the
+// bars' piecewise rail (model.frac). The piecewise rail exists to line tick
+// columns up across stacked bar rows; the ring has no neighbours to align
+// with, and squashing 0..target into the first 60% of the circle made the
+// target mark land at ~7 o'clock with the arc visibly skewed around it.
+// Linear, the target sits at ~9 o'clock (railMax = softMax / 0.85) and the
+// arc grows at an even rate all the way round.
+function energyRing(model, current, color, ticks = []) {
+  const lin = (v) => (model.railMax ? Math.min(1, Math.max(0, v / model.railMax)) : 0);
+  const progress = model.unknown ? 0 : lin(current ?? 0);
   const band = model.band && model.railMax
-    ? { start: model.frac(model.band.start), end: model.frac(model.band.end) }
+    ? { start: lin(model.band.start), end: lin(model.band.end) }
     : null;
-  const tickFracs = model.railMax ? ticks.map((t) => model.frac(t.value)) : [];
+  const tickFracs = model.railMax ? ticks.map((t) => lin(t.value)) : [];
   const svg = ringSVG(92, 8, lastEnergyProgress ?? progress, band, tickFracs);
   const prog = svg.querySelector('.ring-prog');
   prog.style.stroke = lastEnergyColor ?? color;
@@ -275,7 +283,7 @@ export function renderNutritionTile(store) {
     }, icon('dots')),
     h('div', { class: 'nutri-main' },
       h('div', { class: 'nutri-energy' },
-        h('div', { class: 'ringbox' }, energyRing(model, color, nutrientTicks(energyDef, model)),
+        h('div', { class: 'ringbox' }, energyRing(model, current, color, nutrientTicks(energyDef, model)),
           h('div', { class: 'ring-label' },
             kcalNumeral(current),
             h('div', { class: 'ring-goal num' }, `/ ${fmtNutrient(energyDef.target)}`)))),
