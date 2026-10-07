@@ -486,6 +486,7 @@ input[type="time"].input { line-height: 48px; }
 .ring-track { fill: none; stroke: var(--raise3); }
 /* the satisfied band, applied radially (nutrition's energy ring only) */
 .ring-band { fill: none; stroke: var(--raise2); }
+.ring-tick { stroke: var(--text); stroke-width: 2; stroke-linecap: round; }
 .ring-prog {
   fill: none;
   stroke: var(--c);

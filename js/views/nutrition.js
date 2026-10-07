@@ -138,12 +138,13 @@ function glyphSpan(glyph) {
 
 let lastEnergyProgress = null;
 let lastEnergyColor = null;
-function energyRing(model, color) {
+function energyRing(model, color, ticks = []) {
   const progress = model.unknown ? 0 : model.fillFrac;
   const band = model.band && model.railMax
     ? { start: model.band.start / model.railMax, end: model.band.end / model.railMax }
     : null;
-  const svg = ringSVG(92, 8, lastEnergyProgress ?? progress, band);
+  const tickFracs = model.railMax ? ticks.map((t) => t.value / model.railMax) : [];
+  const svg = ringSVG(92, 8, lastEnergyProgress ?? progress, band, tickFracs);
   const prog = svg.querySelector('.ring-prog');
   prog.style.stroke = lastEnergyColor ?? color;
   if (lastEnergyProgress !== progress || lastEnergyColor !== color) {
@@ -275,7 +276,7 @@ export function renderNutritionTile(store) {
     }, icon('dots')),
     h('div', { class: 'nutri-main' },
       h('div', { class: 'nutri-energy' },
-        h('div', { class: 'ringbox' }, energyRing(model, color),
+        h('div', { class: 'ringbox' }, energyRing(model, color, nutrientTicks(energyDef, model)),
           h('div', { class: 'ring-label' },
             kcalNumeral(current),
             h('div', { class: 'ring-goal num' }, `/ ${fmtNutrient(energyDef.target)}`)))),

@@ -224,7 +224,10 @@ export function countUp(el, from, to, fmt = String, ms = 380) {
 // `band`, if given, is { start, end } as 0..1 fractions of the ring and
 // draws a higher-contrast arc segment (nutrition's satisfied-band, applied
 // radially) between the track and the progress arc.
-export function ringSVG(size, stroke, progress, band) {
+// `ticks` (optional): fractions 0..1 around the ring where a white reference
+// mark crosses the stroke — the ring's equivalent of the bars' .nutri-tick,
+// so the target stays legible whatever the rail's headroom makes the fill do.
+export function ringSVG(size, stroke, progress, band, ticks = []) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const off = c * (1 - Math.min(1, Math.max(0, progress)));
@@ -255,6 +258,18 @@ export function ringSVG(size, stroke, progress, band) {
   prog.setAttribute('stroke-dasharray', c);
   prog.setAttribute('stroke-dashoffset', off);
   svg.append(prog);
+  for (const f of ticks) {
+    if (!(f >= 0 && f <= 1)) continue;
+    // the svg is rotated -90deg in CSS, so angle 0 here sits at 12 o'clock
+    const ang = 2 * Math.PI * f;
+    const r0 = r - stroke / 2 - 2, r1 = r + stroke / 2 + 2;
+    const cx = size / 2, cy = size / 2;
+    const ln = document.createElementNS(NS, 'line');
+    ln.setAttribute('x1', cx + r0 * Math.cos(ang)); ln.setAttribute('y1', cy + r0 * Math.sin(ang));
+    ln.setAttribute('x2', cx + r1 * Math.cos(ang)); ln.setAttribute('y2', cy + r1 * Math.sin(ang));
+    ln.setAttribute('class', 'ring-tick');
+    svg.append(ln);
+  }
   svg._setProgress = (p) => {
     prog.setAttribute('stroke-dashoffset', c * (1 - Math.min(1, Math.max(0, p))));
   };
