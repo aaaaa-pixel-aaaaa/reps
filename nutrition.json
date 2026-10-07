@@ -1,6 +1,6 @@
 {
   "schema": 6,
-  "updatedAt": "2026-10-07T21:15:00+11:00",
+  "updatedAt": "2026-10-07T21:18:00+11:00",
   "timezone": "Australia/Sydney",
   "profile": {
     "sex": "male",
@@ -19,7 +19,7 @@
       "NHMRC has draft updated NRVs in consultation; final publication expected during 2026.",
       "targetMin/targetMax are only present where a published range exists (currently the AMDR for carbs and fat). Never invent a band by scaling the target - absence of a bound is information.",
       "upperLimit added for 16 nutrients. All are 2.2x their target or higher, so diet alone will not approach them - they matter only if supplements are introduced.",
-      "2026-10-07: switched to a cut. ~2300 kcal (est. maintenance ~2800 kcal at 186 cm, lifting 3-5x/week, framing work excluded), aiming for 0.4-0.6 kg/week loss. Recalibrate after 2 weeks of weekly-average weigh-ins."
+      "2026-10-07: switched to a cut. ~9,600 kJ (est. maintenance ~11,700 kJ at 186 cm, lifting 3-5x/week, framing work excluded), aiming for 0.4-0.6 kg/week loss. Recalibrate after 2 weeks of weekly-average weigh-ins."
     ],
     "heightCm": 186,
     "age": 19
@@ -42,15 +42,15 @@
   "nutrients": {
     "energy": {
       "label": "Energy",
-      "unit": "kcal",
-      "target": 2300,
+      "unit": "kJ",
+      "target": 9600,
       "direction": "range",
       "group": "macro",
       "display": "always",
       "targetConfidence": "derived",
-      "source": "Cut: ~500 kcal below estimated maintenance (~2800 kcal) for 75 kg, 186 cm, 19 y male lifting 3-5x/week",
-      "softMax": 2600,
-      "note": "Adjust by weekly-average weight trend after 2 weeks: <0.3 kg/week loss -> drop ~200 kcal; >0.8 kg/week or lifts falling -> add ~200 kcal. No lower bound set.",
+      "source": "Cut: ~2,100 kJ below estimated maintenance (~11,700 kJ) for 75 kg, 186 cm, 19 y male lifting 3-5x/week",
+      "softMax": 10900,
+      "note": "Adjust by weekly-average weight trend after 2 weeks: <0.3 kg/week loss -> drop ~850 kJ; >0.8 kg/week or lifts falling -> add ~850 kJ. No lower bound set.",
       "targetMin": null
     },
     "protein": {
@@ -72,7 +72,7 @@
       "group": "macro",
       "display": "always",
       "targetConfidence": "derived",
-      "source": "AMDR 45-65% of energy (US DRI macronutrient table, verified); bounds derived from your 2300 kcal cut target. Target set near the low end so protein can stay high.",
+      "source": "AMDR 45-65% of energy (US DRI macronutrient table, verified); bounds derived from your 9,600 kJ cut target. Target set near the low end so protein can stay high.",
       "targetMin": 259,
       "targetMax": 374
     },
@@ -84,7 +84,7 @@
       "group": "macro",
       "display": "always",
       "targetConfidence": "derived",
-      "source": "AMDR 20-35% of energy (US DRI macronutrient table, verified); bounds derived from your 2300 kcal cut target. Target 60-70 g (~0.8-0.9 g/kg) to support hormones on a cut.",
+      "source": "AMDR 20-35% of energy (US DRI macronutrient table, verified); bounds derived from your 9,600 kJ cut target. Target 60-70 g (~0.8-0.9 g/kg) to support hormones on a cut.",
       "softMax": 95,
       "targetMin": 51,
       "targetMax": 89
@@ -107,7 +107,7 @@
       "group": "macro",
       "display": "monitor",
       "targetConfidence": "guideline",
-      "source": "<10% of energy (Australian Dietary Guidelines), at 2300 kcal",
+      "source": "<10% of energy (Australian Dietary Guidelines), at 9,600 kJ",
       "softMax": 38
     },
     "transFat": {
@@ -568,7 +568,7 @@
           "macroConfidence": "high",
           "microConfidence": "medium",
           "nutrients": {
-            "energy": 371,
+            "energy": 1552,
             "protein": 31.8,
             "carbs": 3.5,
             "fat": 25.8,
@@ -610,7 +610,7 @@
           "macroConfidence": "high",
           "microConfidence": "low",
           "nutrients": {
-            "energy": 396,
+            "energy": 1657,
             "protein": 7.8,
             "carbs": 52.4,
             "fat": 17.2,
@@ -632,7 +632,7 @@
           "macroConfidence": "medium",
           "microConfidence": "medium",
           "nutrients": {
-            "energy": 156,
+            "energy": 653,
             "protein": 6.4,
             "carbs": 15.1,
             "fat": 7.0,
@@ -654,7 +654,7 @@
           "macroConfidence": "medium",
           "microConfidence": "medium",
           "nutrients": {
-            "energy": 416,
+            "energy": 1741,
             "protein": 14,
             "carbs": 80,
             "fat": 2.4,
@@ -676,7 +676,7 @@
           "macroConfidence": "high",
           "microConfidence": "medium",
           "nutrients": {
-            "energy": 225,
+            "energy": 941,
             "protein": 4.9,
             "carbs": 2.9,
             "fat": 21.8,
@@ -696,7 +696,7 @@
           "macroConfidence": "high",
           "microConfidence": "medium",
           "nutrients": {
-            "energy": 189,
+            "energy": 791,
             "protein": 26,
             "carbs": 0.8,
             "fat": 2.5,
@@ -724,7 +724,7 @@
           "macroConfidence": "medium",
           "microConfidence": "low",
           "nutrients": {
-            "energy": 28,
+            "energy": 117,
             "protein": 0,
             "carbs": 5.4,
             "fat": 0,
@@ -740,7 +740,7 @@
           "macroConfidence": "medium",
           "microConfidence": "low",
           "nutrients": {
-            "energy": 120,
+            "energy": 502,
             "protein": 0,
             "carbs": 28,
             "fat": 0,
@@ -757,7 +757,7 @@
           "macroConfidence": "medium",
           "microConfidence": "medium",
           "nutrients": {
-            "energy": 399,
+            "energy": 1669,
             "protein": 14.5,
             "carbs": 72.5,
             "fat": 3.6,
@@ -781,7 +781,7 @@
           "macroConfidence": "medium",
           "microConfidence": "medium",
           "nutrients": {
-            "energy": 674,
+            "energy": 2820,
             "protein": 64.0,
             "carbs": 13.5,
             "fat": 40.4,
@@ -809,7 +809,7 @@
           "macroConfidence": "high",
           "microConfidence": "medium",
           "nutrients": {
-            "energy": 277,
+            "energy": 1159,
             "protein": 10.1,
             "carbs": 4.2,
             "fat": 24.7,
@@ -825,7 +825,7 @@
         }
       ],
       "totals": {
-        "energy": 3251,
+        "energy": 13602,
         "protein": 179.5,
         "carbs": 278.3,
         "fat": 145.4,
@@ -909,7 +909,7 @@
           "macroConfidence": "medium",
           "microConfidence": "medium",
           "nutrients": {
-            "energy": 367,
+            "energy": 1536,
             "protein": 25.8,
             "carbs": 2.3,
             "fat": 27.7,
@@ -940,7 +940,7 @@
           "macroConfidence": "high",
           "microConfidence": "medium",
           "nutrients": {
-            "energy": 382,
+            "energy": 1598,
             "protein": 14,
             "carbs": 2.2,
             "fat": 35,
@@ -964,7 +964,7 @@
           "macroConfidence": "medium",
           "microConfidence": "medium",
           "nutrients": {
-            "energy": 536,
+            "energy": 2243,
             "protein": 14.4,
             "carbs": 63.8,
             "fat": 25.4,
@@ -990,7 +990,7 @@
           "macroConfidence": "low",
           "microConfidence": "low",
           "nutrients": {
-            "energy": 1528,
+            "energy": 6393,
             "protein": 136.5,
             "fat": 105,
             "satFat": 42,
@@ -1011,7 +1011,7 @@
           "macroConfidence": "low",
           "microConfidence": "low",
           "nutrients": {
-            "energy": 440,
+            "energy": 1841,
             "protein": 8,
             "carbs": 64,
             "fat": 16,
@@ -1029,7 +1029,7 @@
           "macroConfidence": "medium",
           "microConfidence": "medium",
           "nutrients": {
-            "energy": 316,
+            "energy": 1322,
             "protein": 13.2,
             "carbs": 31.2,
             "fat": 14.4,
@@ -1052,7 +1052,7 @@
           "macroConfidence": "high",
           "microConfidence": "medium",
           "nutrients": {
-            "energy": 1,
+            "energy": 4,
             "protein": 0,
             "carbs": 0,
             "fat": 0,
@@ -1065,7 +1065,7 @@
         }
       ],
       "totals": {
-        "energy": 3570,
+        "energy": 14937,
         "protein": 211.9,
         "carbs": 163.5,
         "fat": 223.5,
@@ -1140,7 +1140,7 @@
           "macroConfidence": "high",
           "microConfidence": "medium",
           "nutrients": {
-            "energy": 296,
+            "energy": 1238,
             "protein": 66,
             "carbs": 0,
             "fat": 2.8,
@@ -1189,7 +1189,7 @@
           "macroConfidence": "high",
           "microConfidence": "medium",
           "nutrients": {
-            "energy": 13,
+            "energy": 54,
             "protein": 0.55,
             "carbs": 3.1,
             "fat": 0.1,
@@ -1233,7 +1233,7 @@
           "macroConfidence": "high",
           "microConfidence": "medium",
           "nutrients": {
-            "energy": 12,
+            "energy": 50,
             "protein": 0.28,
             "carbs": 2.9,
             "fat": 0.07,
@@ -1277,7 +1277,7 @@
           "macroConfidence": "medium",
           "microConfidence": "low",
           "nutrients": {
-            "energy": 125,
+            "energy": 523,
             "protein": 0.3,
             "carbs": 4,
             "fat": 11,
@@ -1306,7 +1306,7 @@
           "macroConfidence": "medium",
           "microConfidence": "medium",
           "nutrients": {
-            "energy": 130,
+            "energy": 544,
             "protein": 2.7,
             "carbs": 28.2,
             "fat": 0.28,
@@ -1350,7 +1350,7 @@
           "macroConfidence": "high",
           "microConfidence": "medium",
           "nutrients": {
-            "energy": 95,
+            "energy": 397,
             "protein": 0.47,
             "carbs": 25,
             "fat": 0.3,
@@ -1396,7 +1396,7 @@
           "macroConfidence": "high",
           "microConfidence": "medium",
           "nutrients": {
-            "energy": 215,
+            "energy": 900,
             "protein": 18.9,
             "carbs": 1.1,
             "fat": 14.3,
@@ -1446,7 +1446,7 @@
           "macroConfidence": "medium",
           "microConfidence": "low",
           "nutrients": {
-            "energy": 9,
+            "energy": 38,
             "protein": 0,
             "carbs": 0,
             "fat": 1,
@@ -1467,7 +1467,7 @@
           "macroConfidence": "high",
           "microConfidence": "medium",
           "nutrients": {
-            "energy": 107,
+            "energy": 448,
             "protein": 15.6,
             "carbs": 5.6,
             "fat": 2.3,
@@ -1510,7 +1510,7 @@
           "macroConfidence": "medium",
           "microConfidence": "medium",
           "nutrients": {
-            "energy": 260,
+            "energy": 1088,
             "protein": 10,
             "carbs": 50,
             "fat": 1.5,
@@ -1556,7 +1556,7 @@
           "macroConfidence": "medium",
           "microConfidence": "low",
           "nutrients": {
-            "energy": 777,
+            "energy": 3251,
             "protein": 47,
             "carbs": 88,
             "fat": 26,
@@ -1602,7 +1602,7 @@
           "macroConfidence": "medium",
           "microConfidence": "low",
           "nutrients": {
-            "energy": 180,
+            "energy": 753,
             "protein": 25,
             "carbs": 1,
             "fat": 9,
@@ -1649,7 +1649,7 @@
           "macroConfidence": "medium",
           "microConfidence": "low",
           "nutrients": {
-            "energy": 103,
+            "energy": 431,
             "protein": 0.8,
             "carbs": 6.2,
             "fat": 7.8,
@@ -1685,7 +1685,7 @@
           "macroConfidence": "high",
           "microConfidence": "medium",
           "nutrients": {
-            "energy": 61,
+            "energy": 255,
             "protein": 1.1,
             "carbs": 14.7,
             "fat": 0.5,
@@ -1726,7 +1726,7 @@
         }
       ],
       "totals": {
-        "energy": 2383,
+        "energy": 9970,
         "protein": 188.7,
         "carbs": 229.8,
         "fat": 76.95,
