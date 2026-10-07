@@ -137,20 +137,19 @@ function glyphSpan(glyph) {
 
 let lastEnergyProgress = null;
 let lastEnergyColor = null;
-// The ring maps energy linearly onto [0, railMax] rather than through the
-// bars' piecewise rail (model.frac). The piecewise rail exists to line tick
-// columns up across stacked bar rows; the ring has no neighbours to align
-// with, and squashing 0..target into the first 60% of the circle made the
-// target mark land at ~7 o'clock with the arc visibly skewed around it.
-// Linear, the target sits at ~9 o'clock (railMax = softMax / 0.85) and the
-// arc grows at an even rate all the way round.
+// One full revolution of the energy ring is the soft max (the band's upper
+// end), so a closed ring means "at the ceiling". The only tick is the
+// target; the faint band runs from it round to the top. The ring maps
+// linearly rather than through the bars' piecewise rail (model.frac), which
+// only exists to line tick columns up across stacked bar rows. Past the
+// soft max the ring simply stays full while the colour carries the overshoot.
 function energyRing(model, current, color, ticks = []) {
-  const lin = (v) => (model.railMax ? Math.min(1, Math.max(0, v / model.railMax)) : 0);
+  const full = model.band ? model.band.end : model.railMax;
+  const lin = (v) => (full ? Math.min(1, Math.max(0, v / full)) : 0);
   const progress = model.unknown ? 0 : lin(current ?? 0);
-  const band = model.band && model.railMax
-    ? { start: lin(model.band.start), end: lin(model.band.end) }
-    : null;
-  const tickFracs = model.railMax ? ticks.map((t) => lin(t.value)) : [];
+  const band = model.band && full ? { start: lin(model.band.start), end: 1 } : null;
+  const target = ticks.find((t) => t.value === model.band?.start);
+  const tickFracs = full && target ? [lin(target.value)] : [];
   const svg = ringSVG(92, 8, lastEnergyProgress ?? progress, band, tickFracs);
   const prog = svg.querySelector('.ring-prog');
   prog.style.stroke = lastEnergyColor ?? color;
