@@ -117,6 +117,41 @@ export function nutrientRailMax(def, current) {
   return railMax;
 }
 
+// Shared tick columns. Each nutrient has its own units and spread, so a plain
+// linear [0, railMax] rail scatters the target marks to a different x on every
+// row. Instead the rail is piecewise-linear: a range's lower bound always sits
+// at RAIL_COL_LO, and every "target-like" upper mark (min/max target, range
+// upper bound) at RAIL_COL_HI. Rows stacked in a card therefore share the same
+// two tick columns. Values between breakpoints stay linear within their segment.
+export const RAIL_COL_LO = 0.6;
+export const RAIL_COL_HI = 0.85;
+function railBreakpoints(def, railMax) {
+  const pts = [[0, 0]];
+  if (def.direction === 'range') {
+    const start = def.targetMin ?? def.target;
+    const end = def.targetMax ?? def.softMax ?? def.target;
+    if (end > start && start > 0) pts.push([start, RAIL_COL_LO]);
+    if (end > 0) pts.push([end, RAIL_COL_HI]);
+  } else if (def.target > 0) {
+    pts.push([def.target, RAIL_COL_HI]);
+  }
+  const last = pts[pts.length - 1][0];
+  pts.push([Math.max(railMax, last * 1.0001), 1]);
+  return pts;
+}
+// Position of value v along the rail, 0..1 (clamped).
+export function railFrac(def, railMax, v) {
+  if (railMax == null || v == null) return 0;
+  const pts = railBreakpoints(def, railMax);
+  if (v <= 0) return 0;
+  for (let i = 1; i < pts.length; i++) {
+    const [x0, f0] = pts[i - 1];
+    const [x1, f1] = pts[i];
+    if (v <= x1) return f0 + (f1 - f0) * ((v - x0) / (x1 - x0));
+  }
+  return 1;
+}
+
 // The "satisfied" zone, drawn as a section of rail with more contrast than
 // the empty track — this replaces the old fixed tick marker at the target.
 // `hard` marks a real safety ceiling as the band's own upper edge, which
@@ -159,7 +194,9 @@ function nutrientRedPoint(def, band) {
 //   railMax     the rail's right edge, in the nutrient's own unit.
 //   band        { start, end, hard } in the same unit, or null for
 //               direction:"none" (no target to be "satisfied" against).
-//   fillFrac    0..1, current's position along [0, railMax].
+//   fillFrac    0..1, current's position along the rail (see railFrac).
+//   frac(v)     maps any value onto the same rail — ticks, band and hard
+//               zone must go through this so they line up with the fill.
 //   chromaT     0..1 — 0.15 (near-grey, never fully flat) ramping to 1.0
 //               (full identity-hue saturation) as current climbs from 0 to
 //               band.start; already 1.0 anywhere inside or past the band.
@@ -175,11 +212,11 @@ export function nutrientBarModel(def, current) {
   }
   if (current == null) {
     const railMax = nutrientRailMax(def, null);
-    return { unknown: true, glyph, railMax, band: nutrientBand(def, railMax), fillFrac: 0, chromaT: 0, overshootT: 0 };
+    return { unknown: true, glyph, railMax, band: nutrientBand(def, railMax), fillFrac: 0, chromaT: 0, overshootT: 0, frac: (v) => railFrac(def, railMax, v) };
   }
   const railMax = nutrientRailMax(def, current);
   const band = nutrientBand(def, railMax);
-  const fillFrac = Math.min(1, Math.max(0, current / railMax));
+  const fillFrac = Math.min(1, Math.max(0, railFrac(def, railMax, current)));
 
   const chromaT = (band.start <= 0 || current >= band.start)
     ? 1
@@ -192,7 +229,7 @@ export function nutrientBarModel(def, current) {
     overshootT = redPoint > band.end ? Math.min(1, (current - band.end) / (redPoint - band.end)) : 1;
   }
 
-  return { unknown: false, glyph, railMax, band, fillFrac, chromaT, overshootT };
+  return { unknown: false, glyph, railMax, band, fillFrac, chromaT, overshootT, frac: (v) => railFrac(def, railMax, v) };
 }
 
 // Tick priority, used to resolve label collisions on the scale line: the

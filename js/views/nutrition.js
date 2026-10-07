@@ -68,7 +68,7 @@ function animatedFill(key, widthPct, color) {
   return fill;
 }
 
-const pct = (v, railMax) => Math.max(0, Math.min(100, (v / railMax) * 100));
+const pct = (v, model) => Math.max(0, Math.min(100, model.frac(v) * 100));
 
 // The rail: neutral track, a red-tinted zone beyond a hard (upperLimit)
 // ceiling if there's rail past it, then the fill on top. This one function
@@ -77,7 +77,7 @@ const pct = (v, railMax) => Math.max(0, Math.min(100, (v / railMax) * 100));
 function nutriTrack(key, model, color) {
   const kids = [];
   if (model.band && model.railMax && model.band.hard) {
-    const right = pct(model.band.end, model.railMax);
+    const right = pct(model.band.end, model);
     if (right < 100) kids.push(h('div', { class: 'nutri-hardzone', style: `left:${right}%` }));
   }
   kids.push(animatedFill(key, model.unknown ? 0 : model.fillFrac * 100, model.unknown ? 'transparent' : color));
@@ -96,8 +96,7 @@ function nutriScale(key, def, model, { labels = true } = {}) {
   if (!model.railMax) return null;
   const ticks = nutrientTicks(def, model);
   if (!ticks.length) return null;
-  const railMax = model.railMax;
-  const withPct = ticks.map((t) => ({ ...t, pct: pct(t.value, railMax) }));
+  const withPct = ticks.map((t) => ({ ...t, pct: pct(t.value, model) }));
 
   const kept = [];
   for (const t of [...withPct].sort((a, b) => TICK_PRIORITY[b.kind] - TICK_PRIORITY[a.kind])) {
@@ -141,9 +140,9 @@ let lastEnergyColor = null;
 function energyRing(model, color, ticks = []) {
   const progress = model.unknown ? 0 : model.fillFrac;
   const band = model.band && model.railMax
-    ? { start: model.band.start / model.railMax, end: model.band.end / model.railMax }
+    ? { start: model.frac(model.band.start), end: model.frac(model.band.end) }
     : null;
-  const tickFracs = model.railMax ? ticks.map((t) => t.value / model.railMax) : [];
+  const tickFracs = model.railMax ? ticks.map((t) => model.frac(t.value)) : [];
   const svg = ringSVG(92, 8, lastEnergyProgress ?? progress, band, tickFracs);
   const prog = svg.querySelector('.ring-prog');
   prog.style.stroke = lastEnergyColor ?? color;
