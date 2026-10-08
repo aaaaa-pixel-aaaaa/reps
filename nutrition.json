@@ -1135,13 +1135,13 @@
       "entries": [
         {
           "item": "Tuna in springwater",
-          "qty": "280 g (95 g + 185 g tins)",
+          "qty": "280 g (95 g + 185 g tins) — protein from label: 37.4 g per 185 g tin",
           "time": "09:20",
           "macroConfidence": "high",
           "microConfidence": "medium",
           "nutrients": {
-            "energy": 1238,
-            "protein": 66,
+            "energy": 1081,
+            "protein": 56.6,
             "carbs": 0,
             "fat": 2.8,
             "satFat": 0.65,
@@ -1726,8 +1726,8 @@
         }
       ],
       "totals": {
-        "energy": 9970,
-        "protein": 188.7,
+        "energy": 9813,
+        "protein": 179.3,
         "carbs": 229.8,
         "fat": 76.95,
         "fibre": 20.84,
