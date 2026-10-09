@@ -1,6 +1,6 @@
 {
   "schema": 6,
-  "updatedAt": "2026-10-09T21:12:00+11:00",
+  "updatedAt": "2026-10-09T21:35:00+11:00",
   "timezone": "Australia/Sydney",
   "profile": {
     "sex": "male",
@@ -19,7 +19,8 @@
       "NHMRC has draft updated NRVs in consultation; final publication expected during 2026.",
       "targetMin/targetMax are only present where a published range exists (currently the AMDR for carbs and fat). Never invent a band by scaling the target - absence of a bound is information.",
       "upperLimit added for 16 nutrients. All are 2.2x their target or higher, so diet alone will not approach them - they matter only if supplements are introduced.",
-      "2026-10-07: switched to a cut. ~9,600 kJ (est. maintenance ~11,700 kJ at 186 cm, lifting 3-5x/week, framing work excluded), aiming for 0.4-0.6 kg/week loss. Recalibrate after 2 weeks of weekly-average weigh-ins."
+      "2026-10-07: switched to a cut. ~9,600 kJ (est. maintenance ~11,700 kJ at 186 cm, lifting 3-5x/week, framing work excluded), aiming for 0.4-0.6 kg/week loss. Recalibrate after 2 weeks of weekly-average weigh-ins.",
+      "2026-10-09: cut recalibrated to ~8,800 kJ. Previous ~11,700 kJ maintenance assumed 'lifting 3-5x/week' activity; actual pattern is a daily home workout with the rest of the day mostly seated (framing excluded), est. maintenance ~10,600-10,900 kJ. Protein 170 g, fat ~58 g, carbs ~215 g, fibre 38 g. Recalibrate after 2 weeks of weekly-average weigh-ins."
     ],
     "heightCm": 186,
     "age": 19
@@ -43,13 +44,13 @@
     "energy": {
       "label": "Energy",
       "unit": "kJ",
-      "target": 9600,
+      "target": 8800,
       "direction": "range",
       "group": "macro",
       "display": "always",
       "targetConfidence": "derived",
-      "source": "Cut: ~2,100 kJ below estimated maintenance (~11,700 kJ) for 75 kg, 186 cm, 19 y male lifting 3-5x/week",
-      "softMax": 10900,
+      "source": "Cut: ~2,000 kJ below estimated maintenance (~10,600-10,900 kJ) for 75 kg, 186 cm, 19 y male doing a daily home workout but otherwise mostly seated (framing work excluded)",
+      "softMax": 10000,
       "note": "Adjust by weekly-average weight trend after 2 weeks: <0.3 kg/week loss -> drop ~850 kJ; >0.8 kg/week or lifts falling -> add ~850 kJ. No lower bound set.",
       "targetMin": null
     },
@@ -67,27 +68,27 @@
     "carbs": {
       "label": "Carbohydrate",
       "unit": "g",
-      "target": 260,
+      "target": 215,
       "direction": "range",
       "group": "macro",
       "display": "always",
       "targetConfidence": "derived",
-      "source": "AMDR 45-65% of energy (US DRI macronutrient table, verified); bounds derived from your 9,600 kJ cut target. Target set near the low end so protein can stay high.",
-      "targetMin": 259,
-      "targetMax": 374
+      "source": "Target = energy left after protein (170 g) and fat (~58 g) at 8,800 kJ. Floor 130 g = US DRI RDA for carbohydrate (brain glucose need, verified); ceiling 336 g = AMDR 65% of 8,800 kJ. The AMDR 45% floor (233 g) is not used because protein is deliberately high on this cut.",
+      "targetMin": 130,
+      "targetMax": 336
     },
     "fat": {
       "label": "Fat",
       "unit": "g",
-      "target": 65,
+      "target": 58,
       "direction": "range",
       "group": "macro",
       "display": "always",
       "targetConfidence": "derived",
-      "source": "AMDR 20-35% of energy (US DRI macronutrient table, verified); bounds derived from your 9,600 kJ cut target. Target 60-70 g (~0.8-0.9 g/kg) to support hormones on a cut.",
-      "softMax": 95,
-      "targetMin": 51,
-      "targetMax": 89
+      "source": "AMDR 20-35% of energy (US DRI macronutrient table, verified); bounds derived from the 8,800 kJ cut target. Target ~58 g (~0.75 g/kg) to support hormones on a cut.",
+      "softMax": 90,
+      "targetMin": 48,
+      "targetMax": 83
     },
     "fibre": {
       "label": "Fibre",
