@@ -1,6 +1,6 @@
 {
   "schema": 6,
-  "updatedAt": "2026-10-10T20:40:00+11:00",
+  "updatedAt": "2026-10-10T21:06:00+11:00",
   "timezone": "Australia/Sydney",
   "profile": {
     "sex": "male",
@@ -3646,19 +3646,19 @@
           }
         },
         {
-          "item": "White rice, boiled",
+          "item": "Basmati rice, white, boiled",
           "qty": "250 g cooked",
           "time": "20:15",
           "macroConfidence": "medium",
           "microConfidence": "medium",
           "nutrients": {
-            "energy": 1350,
-            "protein": 6.8,
-            "carbs": 71,
-            "fat": 0.8,
+            "energy": 1300,
+            "protein": 7.5,
+            "carbs": 68,
+            "fat": 0.9,
             "satFat": 0.2,
             "transFat": 0,
-            "fibre": 1.0,
+            "fibre": 1.5,
             "sugarsTotal": 0.1,
             "sugarsAdded": 0,
             "cholesterol": 0,
@@ -3829,11 +3829,11 @@
         }
       ],
       "totals": {
-        "energy": 8465,
-        "protein": 215.6,
-        "carbs": 140.8,
-        "fat": 57.6,
-        "fibre": 20.7,
+        "energy": 8415,
+        "protein": 216.3,
+        "carbs": 137.8,
+        "fat": 57.7,
+        "fibre": 21.2,
         "satFat": 9.89,
         "transFat": 0.33,
         "sugarsAdded": 2.5,
