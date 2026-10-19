@@ -1,6 +1,6 @@
 {
   "schema": 6,
-  "updatedAt": "2026-10-19T19:20:00+11:00",
+  "updatedAt": "2026-10-19T19:25:00+11:00",
   "timezone": "Australia/Sydney",
   "profile": {
     "sex": "male",
@@ -7976,16 +7976,16 @@
           }
         },
         {
-          "item": "The Char rotisserie chicken, mixed cuts with some skin (assumed edible weight; estimated)",
+          "item": "The Char rotisserie chicken, breast + drumstick with a fair amount of skin (edible weight; est. ~230 g breast + ~85 g drumstick, oil-basted)",
           "qty": "~315 g",
           "time": "19:00",
           "macroConfidence": "medium",
           "microConfidence": "low",
           "nutrients": {
-            "energy": 2504.25,
-            "protein": 78.75,
-            "fat": 31.5,
-            "satFat": 8.82,
+            "energy": 2700,
+            "protein": 90,
+            "fat": 29,
+            "satFat": 8.2,
             "transFat": 0.32,
             "carbs": 1.57,
             "sugarsTotal": 0.94,
@@ -8073,12 +8073,12 @@
         }
       ],
       "totals": {
-        "energy": 9158.25,
-        "protein": 217.15,
+        "energy": 9354.0,
+        "protein": 228.4,
         "carbs": 157.47,
-        "fat": 75.33,
+        "fat": 72.83,
         "fibre": 15.65,
-        "satFat": 20.93,
+        "satFat": 20.31,
         "transFat": 0.72,
         "sugarsAdded": 4.13,
         "sugarsTotal": 16.64,
