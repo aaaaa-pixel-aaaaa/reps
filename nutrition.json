@@ -1,6 +1,6 @@
 {
   "schema": 6,
-  "updatedAt": "2026-10-25T13:55:00+11:00",
+  "updatedAt": "2026-10-25T13:56:00+11:00",
   "timezone": "Australia/Sydney",
   "profile": {
     "sex": "male",
@@ -11868,20 +11868,20 @@
           }
         },
         {
-          "item": "Milk coffee (flat white-style), full-cream milk, double shot, no sugar (assumed)",
+          "item": "Milk coffee (flat white-style), full-cream milk, double shot, 1.5 sugars (~6 g)",
           "qty": "1 coffee (~140 g milk)",
           "time": "13:30",
           "macroConfidence": "medium",
           "microConfidence": "medium",
           "nutrients": {
-            "energy": 386.0,
+            "energy": 486.0,
             "protein": 4.76,
             "fat": 4.76,
             "satFat": 3.08,
             "transFat": 0.14,
-            "carbs": 6.72,
-            "sugarsTotal": 6.72,
-            "sugarsAdded": 0.0,
+            "carbs": 12.72,
+            "sugarsTotal": 12.72,
+            "sugarsAdded": 6.0,
             "fibre": 0.0,
             "cholesterol": 16.8,
             "calcium": 168.0,
@@ -11913,15 +11913,15 @@
         }
       ],
       "totals": {
-        "energy": 7306.62,
+        "energy": 7406.62,
         "protein": 135.67,
-        "carbs": 172.46,
+        "carbs": 178.46,
         "fat": 54.61,
         "fibre": 10.4,
         "satFat": 20.76,
         "transFat": 0.72,
-        "sugarsAdded": 2.25,
-        "sugarsTotal": 22.46,
+        "sugarsAdded": 8.25,
+        "sugarsTotal": 28.46,
         "cholesterol": 989.8,
         "water": 1.11,
         "alcohol": 0.0,
