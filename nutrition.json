@@ -1,11 +1,11 @@
 {
   "schema": 6,
-  "updatedAt": "2026-10-30T23:50:00+11:00",
+  "updatedAt": "2026-10-30T23:52:00+11:00",
   "timezone": "Australia/Sydney",
   "profile": {
     "sex": "male",
     "ageBand": "19-30",
-    "weightKg": 72,
+    "weightKg": 71,
     "goal": "maintenance (lean, health-balanced split)",
     "sources": [
       "NHMRC / NZ MoH Nutrient Reference Values for Australia and New Zealand (2006; sodium and fluoride revised 2017)",
@@ -21,7 +21,7 @@
       "upperLimit added for 16 nutrients. All are 2.2x their target or higher, so diet alone will not approach them - they matter only if supplements are introduced.",
       "2026-10-07: switched to a cut. ~9,600 kJ (est. maintenance ~11,700 kJ at 186 cm, lifting 3-5x/week, framing work excluded), aiming for 0.4-0.6 kg/week loss. Recalibrate after 2 weeks of weekly-average weigh-ins.",
       "2026-10-09: cut recalibrated to ~8,800 kJ. Previous ~11,700 kJ maintenance assumed 'lifting 3-5x/week' activity; actual pattern is a daily home workout with the rest of the day mostly seated (framing excluded), est. maintenance ~10,600-10,900 kJ. Protein 170 g, fat ~58 g, carbs ~215 g, fibre 38 g. Recalibrate after 2 weeks of weekly-average weigh-ins.",
-      "2026-10-31: CUT ENDED -> MAINTENANCE. Energy 10,000 kJ (soft max 11,000), protein 160 g, carbs ~260 g, fat ~68 g, fibre 38 g. Health/guideline-balanced split: every macro inside the AMDR (carbs 45-65% and fat 20-35% of energy, recomputed for 10,000 kJ -> carbs 130 g RDA floor to 382 g, fat 54-95 g). Profile weight updated 75 -> ~72 kg. Days up to and including 2026-10-30 were logged under the cut targets (see targetHistory). Plan: hold for one week to refill glycogen, then reassess (likely fat up to ~80 g)."
+      "2026-10-31: CUT ENDED -> MAINTENANCE. Energy 10,000 kJ (soft max 11,000), protein 160 g, carbs ~260 g, fat ~68 g, fibre 38 g. Health/guideline-balanced split: every macro inside the AMDR (carbs 45-65% and fat 20-35% of energy, recomputed for 10,000 kJ -> carbs 130 g RDA floor to 382 g, fat 54-95 g). Profile weight updated 75 -> ~71 kg (scale low of 70.4 kg on 2026-10-30). Days up to and including 2026-10-30 were logged under the cut targets (see targetHistory). Plan: hold for one week to refill glycogen, then reassess (likely fat up to ~80 g)."
     ],
     "heightCm": 186,
     "age": 19
@@ -50,7 +50,7 @@
       "group": "macro",
       "display": "always",
       "targetConfidence": "derived",
-      "source": "Maintenance (from 2026-10-31): just under estimated maintenance (~10,300-10,700 kJ at ~72 kg, 186 cm, 19 y male, daily home workout, otherwise mostly seated; framing excluded). Cut-period logged average was ~9,650 kJ with ongoing loss, consistent with that estimate.",
+      "source": "Maintenance (from 2026-10-31): just under estimated maintenance (~10,200-10,600 kJ at ~71 kg, 186 cm, 19 y male, daily home workout, otherwise mostly seated; framing excluded). Cut-period logged average was ~9,650 kJ with ongoing loss, consistent with that estimate.",
       "softMax": 11000,
       "note": "Expect +1-1.5 kg scale gain in week 1 (glycogen + water). Judge from week 2 by weekly-average weigh-ins: rising >0.25 kg/week -> drop ~400-500 kJ; still falling >0.2 kg/week -> add ~400 kJ. Planned reassessment ~2026-11-07 (likely shift to fat ~80 g).",
       "targetMin": null
@@ -64,7 +64,7 @@
       "display": "always",
       "targetConfidence": "derived",
       "source": "2.2-2.4 g/kg bodyweight (165-180 g) for muscle retention on a cut",
-      "note": "NRV RDI is 64 g - the deficiency floor. 160 g (~2.2 g/kg at ~72 kg) is the top of the useful range for muscle gain at maintenance; best split across 3-4 meals of 30-40 g."
+      "note": "NRV RDI is 64 g - the deficiency floor. 160 g (~2.25 g/kg at ~71 kg) is the top of the useful range for muscle gain at maintenance; best split across 3-4 meals of 30-40 g."
     },
     "carbs": {
       "label": "Carbohydrate",
