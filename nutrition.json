@@ -1,12 +1,12 @@
 {
   "schema": 6,
-  "updatedAt": "2026-10-30T19:56:00+11:00",
+  "updatedAt": "2026-10-30T23:50:00+11:00",
   "timezone": "Australia/Sydney",
   "profile": {
     "sex": "male",
     "ageBand": "19-30",
-    "weightKg": 75,
-    "goal": "fat loss (cut)",
+    "weightKg": 72,
+    "goal": "maintenance (lean, health-balanced split)",
     "sources": [
       "NHMRC / NZ MoH Nutrient Reference Values for Australia and New Zealand (2006; sodium and fluoride revised 2017)",
       "Food and Nutrition Board IOM/NAS Dietary Reference Intakes - Vitamins, Elements and Macronutrients tables, males 19-30",
@@ -20,7 +20,8 @@
       "targetMin/targetMax are only present where a published range exists (currently the AMDR for carbs and fat). Never invent a band by scaling the target - absence of a bound is information.",
       "upperLimit added for 16 nutrients. All are 2.2x their target or higher, so diet alone will not approach them - they matter only if supplements are introduced.",
       "2026-10-07: switched to a cut. ~9,600 kJ (est. maintenance ~11,700 kJ at 186 cm, lifting 3-5x/week, framing work excluded), aiming for 0.4-0.6 kg/week loss. Recalibrate after 2 weeks of weekly-average weigh-ins.",
-      "2026-10-09: cut recalibrated to ~8,800 kJ. Previous ~11,700 kJ maintenance assumed 'lifting 3-5x/week' activity; actual pattern is a daily home workout with the rest of the day mostly seated (framing excluded), est. maintenance ~10,600-10,900 kJ. Protein 170 g, fat ~58 g, carbs ~215 g, fibre 38 g. Recalibrate after 2 weeks of weekly-average weigh-ins."
+      "2026-10-09: cut recalibrated to ~8,800 kJ. Previous ~11,700 kJ maintenance assumed 'lifting 3-5x/week' activity; actual pattern is a daily home workout with the rest of the day mostly seated (framing excluded), est. maintenance ~10,600-10,900 kJ. Protein 170 g, fat ~58 g, carbs ~215 g, fibre 38 g. Recalibrate after 2 weeks of weekly-average weigh-ins.",
+      "2026-10-31: CUT ENDED -> MAINTENANCE. Energy 10,000 kJ (soft max 11,000), protein 160 g, carbs ~260 g, fat ~68 g, fibre 38 g. Health/guideline-balanced split: every macro inside the AMDR (carbs 45-65% and fat 20-35% of energy, recomputed for 10,000 kJ -> carbs 130 g RDA floor to 382 g, fat 54-95 g). Profile weight updated 75 -> ~72 kg. Days up to and including 2026-10-30 were logged under the cut targets (see targetHistory). Plan: hold for one week to refill glycogen, then reassess (likely fat up to ~80 g)."
     ],
     "heightCm": 186,
     "age": 19
@@ -44,51 +45,51 @@
     "energy": {
       "label": "Energy",
       "unit": "kJ",
-      "target": 8800,
+      "target": 10000,
       "direction": "range",
       "group": "macro",
       "display": "always",
       "targetConfidence": "derived",
-      "source": "Cut: ~2,000 kJ below estimated maintenance (~10,600-10,900 kJ) for 75 kg, 186 cm, 19 y male doing a daily home workout but otherwise mostly seated (framing work excluded)",
-      "softMax": 10000,
-      "note": "Adjust by weekly-average weight trend after 2 weeks: <0.3 kg/week loss -> drop ~850 kJ; >0.8 kg/week or lifts falling -> add ~850 kJ. No lower bound set.",
+      "source": "Maintenance (from 2026-10-31): just under estimated maintenance (~10,300-10,700 kJ at ~72 kg, 186 cm, 19 y male, daily home workout, otherwise mostly seated; framing excluded). Cut-period logged average was ~9,650 kJ with ongoing loss, consistent with that estimate.",
+      "softMax": 11000,
+      "note": "Expect +1-1.5 kg scale gain in week 1 (glycogen + water). Judge from week 2 by weekly-average weigh-ins: rising >0.25 kg/week -> drop ~400-500 kJ; still falling >0.2 kg/week -> add ~400 kJ. Planned reassessment ~2026-11-07 (likely shift to fat ~80 g).",
       "targetMin": null
     },
     "protein": {
       "label": "Protein",
       "unit": "g",
-      "target": 170,
+      "target": 160,
       "direction": "min",
       "group": "macro",
       "display": "always",
       "targetConfidence": "derived",
       "source": "2.2-2.4 g/kg bodyweight (165-180 g) for muscle retention on a cut",
-      "note": "NRV RDI is 64 g - the deficiency floor. 170 g is the midpoint of the cut range for 75 kg."
+      "note": "NRV RDI is 64 g - the deficiency floor. 160 g (~2.2 g/kg at ~72 kg) is the top of the useful range for muscle gain at maintenance; best split across 3-4 meals of 30-40 g."
     },
     "carbs": {
       "label": "Carbohydrate",
       "unit": "g",
-      "target": 215,
+      "target": 260,
       "direction": "range",
       "group": "macro",
       "display": "always",
       "targetConfidence": "derived",
       "source": "Target = energy left after protein (170 g) and fat (~58 g) at 8,800 kJ. Floor 130 g = US DRI RDA for carbohydrate (brain glucose need, verified); ceiling 336 g = AMDR 65% of 8,800 kJ. The AMDR 45% floor (233 g) is not used because protein is deliberately high on this cut.",
       "targetMin": 130,
-      "targetMax": 336
+      "targetMax": 382
     },
     "fat": {
       "label": "Fat",
       "unit": "g",
-      "target": 58,
+      "target": 68,
       "direction": "range",
       "group": "macro",
       "display": "always",
       "targetConfidence": "derived",
       "source": "AMDR 20-35% of energy (US DRI macronutrient table, verified); bounds derived from the 8,800 kJ cut target. Target ~58 g (~0.75 g/kg) to support hormones on a cut.",
-      "softMax": 90,
-      "targetMin": 48,
-      "targetMax": 83
+      "softMax": 105,
+      "targetMin": 54,
+      "targetMax": 95
     },
     "fibre": {
       "label": "Fibre",
@@ -15059,5 +15060,90 @@
         "vitaminK": 45
       }
     }
-  }
+  },
+  "targetHistory": [
+    {
+      "from": "2026-10-07",
+      "to": "2026-10-30",
+      "phase": "cut",
+      "targets": {
+        "energy": {
+          "target": 8800,
+          "targetMin": null,
+          "targetMax": null,
+          "softMax": 10000
+        },
+        "protein": {
+          "target": 170,
+          "targetMin": null,
+          "targetMax": null,
+          "softMax": null
+        },
+        "carbs": {
+          "target": 215,
+          "targetMin": 130,
+          "targetMax": 336,
+          "softMax": null
+        },
+        "fat": {
+          "target": 58,
+          "targetMin": 48,
+          "targetMax": 83,
+          "softMax": 90
+        },
+        "fibre": {
+          "target": 38,
+          "targetMin": null,
+          "targetMax": null,
+          "softMax": null
+        }
+      },
+      "loggedAverages": {
+        "energy": 9657,
+        "protein": 191,
+        "carbs": 209,
+        "fat": 66,
+        "fibre": 23,
+        "satFat": 19,
+        "days": 24
+      }
+    },
+    {
+      "from": "2026-10-31",
+      "to": null,
+      "phase": "maintenance",
+      "targets": {
+        "energy": {
+          "target": 10000,
+          "targetMin": null,
+          "targetMax": null,
+          "softMax": 11000
+        },
+        "protein": {
+          "target": 160,
+          "targetMin": null,
+          "targetMax": null,
+          "softMax": null
+        },
+        "carbs": {
+          "target": 260,
+          "targetMin": 130,
+          "targetMax": 382,
+          "softMax": null
+        },
+        "fat": {
+          "target": 68,
+          "targetMin": 54,
+          "targetMax": 95,
+          "softMax": 105
+        },
+        "fibre": {
+          "target": 38,
+          "targetMin": null,
+          "targetMax": null,
+          "softMax": null
+        }
+      }
+    }
+  ]
 }
