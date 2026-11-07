@@ -1,6 +1,6 @@
 {
   "schema": 6,
-  "updatedAt": "2026-11-07T22:00:00+11:00",
+  "updatedAt": "2026-11-07T22:28:00+11:00",
   "timezone": "Australia/Sydney",
   "profile": {
     "sex": "male",
@@ -22,7 +22,7 @@
       "2026-10-07: switched to a cut. ~9,600 kJ (est. maintenance ~11,700 kJ at 186 cm, lifting 3-5x/week, framing work excluded), aiming for 0.4-0.6 kg/week loss. Recalibrate after 2 weeks of weekly-average weigh-ins.",
       "2026-10-09: cut recalibrated to ~8,800 kJ. Previous ~11,700 kJ maintenance assumed 'lifting 3-5x/week' activity; actual pattern is a daily home workout with the rest of the day mostly seated (framing excluded), est. maintenance ~10,600-10,900 kJ. Protein 170 g, fat ~58 g, carbs ~215 g, fibre 38 g. Recalibrate after 2 weeks of weekly-average weigh-ins.",
       "2026-10-31: CUT ENDED -> MAINTENANCE. Energy 10,000 kJ (soft max 11,000), protein 160 g, carbs ~260 g, fat ~68 g, fibre 38 g. Health/guideline-balanced split: every macro inside the AMDR (carbs 45-65% and fat 20-35% of energy, recomputed for 10,000 kJ -> carbs 130 g RDA floor to 382 g, fat 54-95 g). Profile weight updated 75 -> ~71 kg (scale low of 70.4 kg on 2026-10-30). Days up to and including 2026-10-30 were logged under the cut targets (see targetHistory). Plan: hold for one week to refill glycogen, then reassess (likely fat up to ~80 g).",
-      "2026-11-08: MAINTENANCE RECOMP. After one week at 10,000 kJ, moved to true maintenance: energy 10,300 kJ (soft max 11,000), protein 155 g, carbs ~273 g, fat ~73 g (protein ~25.6% (2.2 g/kg, slightly over the AMDR 25% ceiling by choice), carbs at the AMDR 45% floor, fat ~26%; first drafted as 160/255/80, adjusted the same evening), fibre 38 g. Chose holding maintenance (recomp) over a small surplus (~11,000 kJ) to keep fat gain at zero; progress depends on training progression (reps, harder variations, tempo, heavier dumbbells; ~10-20 hard sets per muscle per week). Bounds: carbs 130-394 g, fat 56-97 g."
+      "2026-11-08: MAINTENANCE RECOMP. After one week at 10,000 kJ, moved to true maintenance: energy 10,300 kJ (soft max 11,000), protein 151 g, carbs ~273 g, fat ~75 g (protein at the AMDR 25% ceiling, carbs at the AMDR 45% floor, fat ~27% absorbs the rest; first drafted as 160/255/80, adjusted the same evening), fibre 38 g. Chose holding maintenance (recomp) over a small surplus (~11,000 kJ) to keep fat gain at zero; progress depends on training progression (reps, harder variations, tempo, heavier dumbbells; ~10-20 hard sets per muscle per week). Bounds: carbs 130-394 g, fat 56-97 g."
     ],
     "heightCm": 186,
     "age": 19
@@ -59,12 +59,12 @@
     "protein": {
       "label": "Protein",
       "unit": "g",
-      "target": 155,
+      "target": 151,
       "direction": "min",
       "group": "macro",
       "display": "always",
       "targetConfidence": "derived",
-      "source": "~2.2 g/kg bodyweight at ~71 kg: the upper end of the useful range for muscle gain (benefit plateaus ~1.6 g/kg, upper CI ~2.2 g/kg; Morton et al. 2018). Set 2026-11-07 at Aaron's request; ~25.6% of 10,300 kJ, a touch over the AMDR 25% ceiling, accepted deliberately.",
+      "source": "AMDR 25% ceiling of 10,300 kJ (~151 g, ~2.1 g/kg at ~71 kg): near the top of the useful range for muscle gain (benefit plateaus ~1.6 g/kg, upper CI ~2.2 g/kg; Morton et al. 2018). Set 2026-11-07 at Aaron's request.",
       "note": "NRV RDI is 64 g - the deficiency floor. 160 g (~2.25 g/kg at ~71 kg) is the top of the useful range for muscle gain at maintenance; best split across 3-4 meals of 30-40 g."
     },
     "carbs": {
@@ -75,19 +75,19 @@
       "group": "macro",
       "display": "always",
       "targetConfidence": "derived",
-      "source": "Target = AMDR 45% floor of 10,300 kJ (~273 g), with protein (155 g), fat (~73 g) and fibre energy filling the rest. Hard floor 130 g = US DRI RDA for carbohydrate (brain glucose need, verified); ceiling 394 g = AMDR 65% of 10,300 kJ.",
+      "source": "Target = AMDR 45% floor of 10,300 kJ (~273 g), with protein (151 g, AMDR 25% ceiling), fat (~75 g) and fibre energy filling the rest. Hard floor 130 g = US DRI RDA for carbohydrate (brain glucose need, verified); ceiling 394 g = AMDR 65% of 10,300 kJ.",
       "targetMin": 130,
       "targetMax": 394
     },
     "fat": {
       "label": "Fat",
       "unit": "g",
-      "target": 73,
+      "target": 75,
       "direction": "range",
       "group": "macro",
       "display": "always",
       "targetConfidence": "derived",
-      "source": "AMDR 20-35% of energy (US DRI macronutrient table, verified); bounds derived from the 10,300 kJ maintenance target. Target ~73 g (~26% of energy) = energy left after protein 155 g and carbs at the AMDR 45% floor.",
+      "source": "AMDR 20-35% of energy (US DRI macronutrient table, verified); bounds derived from the 10,300 kJ maintenance target. Target ~75 g (~27% of energy) = energy left after protein at the AMDR 25% ceiling and carbs at the AMDR 45% floor.",
       "softMax": 105,
       "targetMin": 56,
       "targetMax": 97
@@ -20514,7 +20514,7 @@
           "softMax": 11000
         },
         "protein": {
-          "target": 155,
+          "target": 151,
           "targetMin": null,
           "targetMax": null,
           "softMax": null
@@ -20526,7 +20526,7 @@
           "softMax": null
         },
         "fat": {
-          "target": 73,
+          "target": 75,
           "targetMin": 56,
           "targetMax": 97,
           "softMax": 105
