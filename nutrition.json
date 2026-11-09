@@ -1,6 +1,6 @@
 {
   "schema": 6,
-  "updatedAt": "2026-11-09T08:10:00+11:00",
+  "updatedAt": "2026-11-09T11:58:00+11:00",
   "timezone": "Australia/Sydney",
   "profile": {
     "sex": "male",
@@ -21362,14 +21362,14 @@
           }
         },
         {
-          "item": "True Flavour WPI 90 whey protein isolate (flavour not specified; Rich Chocolate label used)",
+          "item": "True Flavour WPI 90 whey protein isolate, new flavour (25 g protein per 30 g per Aaron; other values from Rich Chocolate label)",
           "qty": "1 scoop/sachet (30 g)",
           "time": "08:00",
           "macroConfidence": "high",
           "microConfidence": "medium",
           "nutrients": {
-            "energy": 447,
-            "protein": 24,
+            "energy": 464,
+            "protein": 25,
             "carbs": 1.5,
             "fat": 0.5,
             "satFat": 0.5,
@@ -21504,8 +21504,8 @@
         }
       ],
       "totals": {
-        "energy": 3744.88,
-        "protein": 68.89,
+        "energy": 3761.88,
+        "protein": 69.89,
         "carbs": 99.18,
         "fat": 20.27,
         "fibre": 19.52,
