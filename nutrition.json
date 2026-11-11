@@ -1,6 +1,6 @@
 {
   "schema": 6,
-  "updatedAt": "2026-11-11T18:40:00+11:00",
+  "updatedAt": "2026-11-11T21:35:00+11:00",
   "timezone": "Australia/Sydney",
   "profile": {
     "sex": "male",
@@ -23,7 +23,8 @@
       "2026-10-09: cut recalibrated to ~8,800 kJ. Previous ~11,700 kJ maintenance assumed 'lifting 3-5x/week' activity; actual pattern is a daily home workout with the rest of the day mostly seated (framing excluded), est. maintenance ~10,600-10,900 kJ. Protein 170 g, fat ~58 g, carbs ~215 g, fibre 38 g. Recalibrate after 2 weeks of weekly-average weigh-ins.",
       "2026-10-31: CUT ENDED -> MAINTENANCE. Energy 10,000 kJ (soft max 11,000), protein 160 g, carbs ~260 g, fat ~68 g, fibre 38 g. Health/guideline-balanced split: every macro inside the AMDR (carbs 45-65% and fat 20-35% of energy, recomputed for 10,000 kJ -> carbs 130 g RDA floor to 382 g, fat 54-95 g). Profile weight updated 75 -> ~71 kg (scale low of 70.4 kg on 2026-10-30). Days up to and including 2026-10-30 were logged under the cut targets (see targetHistory). Plan: hold for one week to refill glycogen, then reassess (likely fat up to ~80 g).",
       "2026-11-08: SMALL SURPLUS (LEAN GAIN). Maintenance recomp (10,300 kJ / 151 P / 273 C / 75 F) was set on the evening of 2026-11-07 but replaced the next morning, before it started, by a small surplus: energy 11,000 kJ (soft max 11,700), protein 151 g, carbs ~291 g (AMDR 45% floor), fat ~86 g, fibre 38 g. Expected ~1 kg/month gain, roughly half to two-thirds muscle (~0.3-0.5 kg fat/month). Progress depends on training progression (reps, harder variations, tempo, heavier dumbbells; ~10-20 hard sets per muscle per week, each muscle at least twice weekly). Bounds: carbs 130-420 g, fat 59-104 g.",
-      "2026-11-10: MAINTENANCE (UNI STUDY BLOCK, REDUCED TRAINING). Small surplus paused after 2 days (2026-11-08 to 2026-11-09) because training will be inconsistent for ~3-4 weeks. Energy 9,800 kJ (soft max 10,500), protein 154 g (2.2 g/kg at 70 kg), carbs ~259 g (AMDR 45% floor), fat ~67 g, fibre 38 g. Bounds: carbs 130-375 g, fat 53-93 g. Profile weight 71 -> 70 kg. Muscle upkeep: 1-2 short myo-rep sessions/week with sets near failure. Resume the 11,000 kJ surplus once training is consistent."
+      "2026-11-10: MAINTENANCE (UNI STUDY BLOCK, REDUCED TRAINING). Small surplus paused after 2 days (2026-11-08 to 2026-11-09) because training will be inconsistent for ~3-4 weeks. Energy 9,800 kJ (soft max 10,500), protein 154 g (2.2 g/kg at 70 kg), carbs ~259 g (AMDR 45% floor), fat ~67 g, fibre 38 g. Bounds: carbs 130-375 g, fat 53-93 g. Profile weight 71 -> 70 kg. Muscle upkeep: 1-2 short myo-rep sessions/week with sets near failure. Resume the 11,000 kJ surplus once training is consistent.",
+      "2026-11-12: STUDY-BLOCK MAINTENANCE REVISED 9,800 -> 11,000 kJ. Logs showed 9,800 kJ was likely a deficit (cut averaged 9,657 kJ while losing weight; ~10,950 kJ since 31 Oct with no gain). Energy 11,000 kJ (soft max 11,700), protein 154 g (2.2 g/kg at 70 kg), carbs ~291 g (AMDR 45% floor), fat ~85 g, fibre 38 g. Bounds: carbs 130-420 g, fat 59-104 g. 9,800 kJ targets applied 2026-11-10 to 2026-11-11 (see targetHistory)."
     ],
     "heightCm": 186,
     "age": 19
@@ -47,14 +48,14 @@
     "energy": {
       "label": "Energy",
       "unit": "kJ",
-      "target": 9800,
+      "target": 11000,
       "direction": "range",
       "group": "macro",
       "display": "always",
       "targetConfidence": "derived",
-      "source": "Maintenance for a ~3-4 week uni study block from 2026-11-10, while training is inconsistent: at or slightly under estimated maintenance (~10,200-10,600 kJ at ~71 kg with a daily home workout; lower with fewer workouts, more sitting and ~70 kg). A surplus without consistent training mostly adds fat; a deficit with reduced training risks muscle.",
-      "softMax": 10500,
-      "note": "Check weekly-average weight: rising >0.2 kg/week for two weeks -> drop ~400 kJ; falling -> add ~400 kJ. Return to the 11,000 kJ small surplus (see targetHistory) once training is consistent again.",
+      "source": "Maintenance for a ~3-4 week uni study block from 2026-11-12, while training is inconsistent. Re-estimated from logs on 2026-11-11: the cut (7-30 Oct) averaged 9,657 kJ while losing ~4.5 kg (est. 1.5-3 kg tissue), and 31 Oct-10 Nov averaged ~10,950 kJ with no weight gain despite glycogen refill -> maintenance ~11,000-11,500 kJ with reduced training (worst case with scale noise and logging overestimates ~10,300-10,800). A surplus without consistent training mostly adds fat; a deficit with reduced training risks muscle.",
+      "softMax": 11700,
+      "note": "Check weekly-average weight after week 2: rising >0.3 kg over 2 weeks -> drop ~500 kJ; falling -> add ~500 kJ. Muscle upkeep: at least 2 short myo-rep sessions/week with sets near failure.",
       "targetMin": null
     },
     "protein": {
@@ -65,33 +66,33 @@
       "group": "macro",
       "display": "always",
       "targetConfidence": "derived",
-      "source": "2.2 g/kg at 70 kg (2026-11-10) = the upper CI of the plateau in resistance-training gains (Morton et al. 2018, 1.62 g/kg, 95% CI 1.03-2.20). Set at the top of the useful range to protect muscle while training is reduced (~27% of 9,800 kJ).",
+      "source": "2.2 g/kg at 70 kg (2026-11-10) = the upper CI of the plateau in resistance-training gains (Morton et al. 2018, 1.62 g/kg, 95% CI 1.03-2.20). Set at the top of the useful range to protect muscle while training is reduced (~24% of 11,000 kJ).",
       "note": "NRV RDI is 64 g - the deficiency floor. Above ~2.2 g/kg adds little; best split across 3-4 meals of 30-40 g, plus a serve before bed."
     },
     "carbs": {
       "label": "Carbohydrate",
       "unit": "g",
-      "target": 259,
+      "target": 291,
       "direction": "range",
       "group": "macro",
       "display": "always",
       "targetConfidence": "derived",
-      "source": "Target = AMDR 45% floor of 9,800 kJ (~259 g). Hard floor 130 g = US DRI RDA for carbohydrate (brain glucose need, verified); ceiling 375 g = AMDR 65% of 9,800 kJ.",
+      "source": "Target = AMDR 45% floor of 11,000 kJ (~291 g). Hard floor 130 g = US DRI RDA for carbohydrate (brain glucose need, verified); ceiling 420 g = AMDR 65% of 11,000 kJ.",
       "targetMin": 130,
-      "targetMax": 375
+      "targetMax": 420
     },
     "fat": {
       "label": "Fat",
       "unit": "g",
-      "target": 67,
+      "target": 85,
       "direction": "range",
       "group": "macro",
       "display": "always",
       "targetConfidence": "derived",
-      "source": "AMDR 20-35% of energy (US DRI macronutrient table, verified); bounds derived from the 9,800 kJ maintenance target. Target ~67 g (~25% of energy) = energy left after protein 154 g, carbs at the AMDR 45% floor and fibre energy.",
-      "softMax": 100,
-      "targetMin": 53,
-      "targetMax": 93
+      "source": "AMDR 20-35% of energy (US DRI macronutrient table, verified); bounds derived from the 11,000 kJ maintenance target. Target ~85 g (~29% of energy) = energy left after protein 154 g, carbs at the AMDR 45% floor and fibre energy.",
+      "softMax": 110,
+      "targetMin": 59,
+      "targetMax": 104
     },
     "fibre": {
       "label": "Fibre",
@@ -23418,7 +23419,7 @@
     },
     {
       "from": "2026-11-10",
-      "to": null,
+      "to": "2026-11-11",
       "phase": "maintenance (uni study block, reduced training)",
       "targets": {
         "energy": {
@@ -23444,6 +23445,43 @@
           "targetMin": 53,
           "targetMax": 93,
           "softMax": 100
+        },
+        "fibre": {
+          "target": 38,
+          "targetMin": null,
+          "targetMax": null,
+          "softMax": null
+        }
+      }
+    },
+    {
+      "from": "2026-11-12",
+      "to": null,
+      "phase": "maintenance (uni study block, reduced training) - revised",
+      "targets": {
+        "energy": {
+          "target": 11000,
+          "targetMin": null,
+          "targetMax": null,
+          "softMax": 11700
+        },
+        "protein": {
+          "target": 154,
+          "targetMin": null,
+          "targetMax": null,
+          "softMax": null
+        },
+        "carbs": {
+          "target": 291,
+          "targetMin": 130,
+          "targetMax": 420,
+          "softMax": null
+        },
+        "fat": {
+          "target": 85,
+          "targetMin": 59,
+          "targetMax": 104,
+          "softMax": 110
         },
         "fibre": {
           "target": 38,
